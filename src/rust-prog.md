@@ -1,3 +1,5 @@
+[TOC]
+
 # 数据结构
 
 ## 字符串 String
@@ -56,6 +58,18 @@ if let Some(x) = s.find(|&c| c==val);
 *map.entry(c).or_insert(0) += 1;
 ```
 
+# 基本类型
+
+## 有符号、无符号整数
+
+### count_ones
+
+返回 `self` 二进制表示形式中1的个数
+
+```rust
+let number = (i as i32).count_ones();
+```
+
 
 
 # Trait
@@ -65,3 +79,17 @@ if let Some(x) = s.find(|&c| c==val);
 ### enumerate
 
 创建迭代器，返回当前迭代次数以及下一个值的对 `(i, val)`，`i:usize` 是当前迭代索引，`val` 是值
+
+# 宏
+
+## 输入输出
+
+### format
+
+使用运行时表达式的插值创建 `String`，收到的第一个参数是格式字符串，其他参数将以给定的顺序替换格式字符串中的 `{}`
+
+```rust
+// 将数字以时间形式放进vec中
+vec.push(format!("{}:{}", i, j));
+```
+
