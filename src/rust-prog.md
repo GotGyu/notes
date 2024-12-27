@@ -76,6 +76,19 @@ let number = (i as i32).count_ones();
 
 ## 迭代器 Iterator
 
+### collect
+
+将迭代器转换为集合，可以将任何可迭代的东西变成一个相关的集合，可以用 `collect::<>` 指定集合类型，比如 `iter.collect::<Vec<_>>` 即转换为 `Vec` 类型
+
+```rust
+// 基本用法
+let a = [1, 2, 3];
+let doubled: Vec<i32> = a.iter()
+                         .map(|&x| x * 2)
+                         .collect();
+assert_eq!(vec![2, 4, 6], doubled);
+```
+
 ### enumerate
 
 创建迭代器，返回当前迭代次数以及下一个值的对 `(i, val)`，`i:usize` 是当前迭代索引，`val` 是值
