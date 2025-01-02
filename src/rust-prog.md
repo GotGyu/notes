@@ -58,6 +58,28 @@ if let Some(x) = s.find(|&c| c==val);
 *map.entry(c).or_insert(0) += 1;
 ```
 
+### keys
+
+以任意顺序访问HashMap所有键的迭代器，可以遍历HashMap的key
+
+```rust
+for value in map.keys() {
+    //...
+}
+```
+
+### values
+
+以任意顺序访问HashMap所有值的迭代器，可以遍历HashMap的value
+
+```rust
+for value in map.values() {
+    //...
+}
+```
+
+
+
 # 基本类型
 
 ## 有符号、无符号整数
