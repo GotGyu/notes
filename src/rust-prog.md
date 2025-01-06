@@ -2,6 +2,38 @@
 
 # 数据结构
 
+## 字符 char
+
+### is_lowercase/is_uppercase
+
+如果该 `char` 具有 `Lowercase` /`Uppercase `属性，则返回 `true`
+
+```rus
+assert!('a'.is_lowercase());  // true
+assert!('δ'.is_lowercase());  // false
+```
+
+### make_ascii_lowercase/make_ascii_uppercase
+
+将此类型**就地转换**为其 ASCII 小写/大写等效项，非 ASCII 字母不变
+
+```rust
+let mut ascii = 'a';
+ascii.make_ascii_uppercase();
+assert_eq!('A', ascii);
+```
+
+### to_ascii_lowercase/to_ascii_uppercase
+
+使值的**副本**等效于其 ASCII 小写/大写字母，非 ASCII 字母不变
+
+```rust
+let ascii = 'a';
+assert_eq!('A', ascii.to_ascii_uppercase());
+```
+
+
+
 ## 字符串 String
 
 UTF-8编码的可增长字符串
@@ -114,6 +146,33 @@ assert_eq!(vec![2, 4, 6], doubled);
 ### enumerate
 
 创建迭代器，返回当前迭代次数以及下一个值的对 `(i, val)`，`i:usize` 是当前迭代索引，`val` 是值
+
+```rust
+let a = ['a', 'b', 'c'];
+let mut iter = a.iter().enumerate();
+assert_eq!(iter.next(), Some((0, &'a')));
+```
+
+### next
+
+推进迭代器并返回下一个值，迭代完成后返回 `None`
+
+```rust
+let a = [1, 2, 3];
+let mut iter = a.iter();
+assert_eq!(Some(&1), iter.next());
+```
+
+### rev
+
+反转迭代器的方向，改为从右向左进行迭代
+
+```rust
+// 将String倒序输出
+let ans = s.chars().rev().collect()
+```
+
+
 
 # 宏
 
