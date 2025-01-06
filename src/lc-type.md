@@ -13,3 +13,48 @@ while l < r {
 return left;
 ```
 
+## 单调栈
+
+触发关键词**下一个更大元素**
+
+宗旨：及时去掉无用数据，保证栈中数据有序
+
+### 从右到左
+
+从右往左倒着遍历，栈中记录下一个更大元素的**候选项**。由于左边更大元素会**挡住**右边更小的元素，所以右边更小的元素是**无用信息**（也就是，不会成为左边元素的下一个更大元素），这会导致**栈底（右边）大，栈顶（左边）小**
+
+```rust
+use std::collections::HashMap;
+let mut ans = vec![0;n];
+// 候选栈
+let mut st = vec![];
+for (i, &t) in input.iter().enumerate().rev() {
+    // 新元素值更大则弹出右边的小元素
+    while !st.is_empty() && t>=input[st[st.len()-1]] {
+        st.pop();
+    }
+    // 存入新的左边大元素
+    st.push(i)
+}
+```
+
+### 从左到右
+
+栈中记录**还没算出**下一个更大元素的那些数，只要遍历到比栈顶元素更大的数，就意味着栈顶元素找到了答案，记录答案，并弹出栈顶。
+
+```rust
+use std::collections::HashMap;
+let mut ans = vec![0;n];
+// 相当于栈是一个todolist
+let mut st = vec![];
+for (i, &t) in input.iter().enumerate() {
+    while !st.is_empty() && t>input[st[st.len()-1]] {
+        //...
+    }
+    st.push(i)
+}
+```
+
+### 题单
+
+496
