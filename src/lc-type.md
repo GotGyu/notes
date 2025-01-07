@@ -58,3 +58,23 @@ for (i, &t) in input.iter().enumerate() {
 ### 题单
 
 496
+
+## 转换进制
+
+递归，以转换为7进制为例，针对 `num<0` 和 `num<7` 分别处理，之后进行递归，不断**拼接余数**到字符串
+
+```rust
+pub fn convert_to_base7(num: i32)-> String {
+    if num < 0 {
+        return format!("-{}",convert to base7(-num));
+    }
+    if num < 7 {
+        return format!("{}",num);
+    }
+	format!("{}{}", convert to base7(num/7), convert to_base7(num%7))
+}
+```
+
+### 题单
+
+504
