@@ -1,6 +1,18 @@
 [TOC]
 
-# 基础结构
+# 基本类型
+
+## 数值类型
+
+### 有符号、无符号整数
+
+#### count_ones
+
+返回 `self` 二进制表示形式中1的个数
+
+```rust
+let number = (i as i32).count_ones();
+```
 
 ## 字符 char
 
@@ -8,7 +20,7 @@
 
 如果该 `char` 具有 `Lowercase` /`Uppercase `属性，则返回 `true`
 
-```rus
+```rust
 assert!('a'.is_lowercase());  // true
 assert!('δ'.is_lowercase());  // false
 ```
@@ -31,6 +43,131 @@ assert_eq!('A', ascii);
 let ascii = 'a';
 assert_eq!('A', ascii.to_ascii_uppercase());
 ```
+
+## 布尔 bool
+
+## 单元类型 ()
+
+单元类型就是 `()`，不占用任何内存
+
+# 复合类型
+
+## 切片 slice
+
+切片是一个内存块的视图，表示为一个指针和一个长度，也就是**引用集合中部分连续的元素序列**，而非整个集合。切片是可变的或共享的。 共享切片类型为 `&[T]`，而可变切片类型为 `&mut [T]`，如
+
+```rust
+let s = String::from("hello world");
+// 创建切片，左闭右开区间
+let hello = &s[0..5];
+let world = &s[6..11];
+```
+
+### join
+
+将 `T` 的切片展平为单个值 `Self::Output`，并在每个值之间放置一个给定的分隔符
+
+```rust
+assert_eq!(["hello", "world","Mary"].join(" "), "hello world Mary");
+```
+
+
+
+## 字符串切片 str
+
+`str` 类型，是最原始的字符串类型，通常以其借用形式 `&str` 出现，也是字符串字面量的类型，`&'static str`，比如以下就是一个字符串切片：
+
+```rust
+let s = "Hello, World"; //此处s的类型是&str
+```
+
+`str` 类型被硬编码进可执行文件，无法被修改，但 `String` 是可增长、可改变且具有所有权的 `UTF-8` 编码字符串（即字符串中的字符所占的字节数是变化的(1 - 4)），`&str` 也是 `UTF-8` 编码字符串
+
+### bytes
+
+返回字符串切片的**字节**上的迭代器，用来通过字节遍历字符串切片
+
+```rust
+// 计算一个str中字符的ascii码之和
+for i in s.bytes() {
+    sum += i as u8;
+}
+```
+
+### chars
+
+返回字符串切片的 `char` 上的迭代器，用来通过 `char` 遍历字符串切片，每次调用都会返回下一个未被遍历的**字符**
+
+```rust
+// 使用 enumerate 获取字符与其位置
+for (i,val) in str.chars().enumerate() {...} // i为索引下标，val为对应位置值
+```
+
+### split_whitespace
+
+用空格分割str，返回的迭代器指向每一个str，任意连续空格被视作一个空格
+
+```rust
+let mut iter = "Mary   a word".split_whitespace()；
+assert_eq!(Some("Mary"), iter.next());
+assert_eq!(Some("a"), iter.next());
+assert_eq!(Some("word"), iter.next());
+```
+
+
+
+## 字符串 String
+
+UTF-8编码的可增长字符串，取引用则转换为 `&str`
+
+### as_str
+
+提取包含整个 `String` 的字符串切片
+
+```rust
+let s = String::from("foo");
+assert_eq!("foo", s.as_str());  //s.as_str()为&str类型
+```
+
+### find
+
+```rust
+// 函数签名
+// pat可以是&str, char, char的切片，以及确定字符是否匹配的函数或闭包
+pub fn find<'a, P>(&'a self, pat: P) -> Option<usize>
+where
+    P: Pattern<'a>,
+```
+
+返回字符串切片中与模式匹配的**第一个**字符的字节索引，模式不匹配则返回 `None`
+
+```rust
+// 查找某字符第一次出现的下标
+if let Some(x) = s.find(|&c| c==val);
+```
+
+### from
+
+从字符串字面量（`&str`）创建一个 `String`
+
+```rust
+let hello = String::from("Hello, world!"); // hello是String类型
+```
+
+### push_str
+
+将给定的字符串切片 `&str` 原地追加到这个 `String` 的末尾
+
+```rust
+let mut s = String::from("foo");
+s.push_str("bar");  // s:String=foobar
+```
+
+## 数组 array
+
+## 
+
+# 集合类型
 
 ## 哈希表 HashMap
 
@@ -67,78 +204,6 @@ for value in map.values() {
 
 
 
-## 切片 slice
-
-切片是一个内存块的视图，表示为一个指针和一个长度。切片是可变的或共享的。 共享切片类型为 `&[T]`，而可变切片类型为 `&mut [T]`
-
-### join
-
-将 `T` 的切片展平为单个值 `Self::Output`，并在每个值之间放置一个给定的分隔符
-
-```rust
-assert_eq!(["hello", "world","Mary"].join(" "), "hello world Mary");
-```
-
-
-
-## 字符串切片 str
-
-`str` 类型，是最原始的字符串类型，通常以其借用形式 `&str` 出现，也是字符串字面量的类型，`&'static str`
-
-### bytes
-
-返回字符串切片的**字节**上的迭代器，用来通过字节遍历字符串切片
-
-```rust
-// 计算一个str中字符的ascii码之和
-for i in s.bytes() {
-    sum += i as u8;
-}
-```
-
-### split_whitespace
-
-用空格分割str，返回的迭代器指向每一个str，任意连续空格被视作一个空格
-
-```rust
-let mut iter = "Mary   a word".split_whitespace()；
-assert_eq!(Some("Mary"), iter.next());
-assert_eq!(Some("a"), iter.next());
-assert_eq!(Some("word"), iter.next());
-```
-
-
-
-## 字符串 String
-
-UTF-8编码的可增长字符串
-
-### chars
-
-返回字符串切片的 `char` 上的迭代器，用来通过 `char` 遍历字符串切片，每次调用都会返回下一个未被遍历的字符
-
-```rust
-// 使用 enumerate 获取字符与其位置
-for (i,val) in str.chars().enumerate() {...} // i为索引下标，val为对应位置值
-```
-
-### find
-
-```rust
-// 函数签名
-// pat可以是&str, char, char的切片，以及确定字符是否匹配的函数或闭包
-pub fn find<'a, P>(&'a self, pat: P) -> Option<usize>
-where
-    P: Pattern<'a>,
-```
-
-返回字符串切片中与模式匹配的**第一个**字符的字节索引，模式不匹配则返回 `None`
-
-```rust
-// 查找某字符第一次出现的下标
-if let Some(x) = s.find(|&c| c==val);
-```
-
 ## 双端队列 VecDeque
 
 使用可增长的环形缓冲区实现的双端队列
@@ -169,23 +234,19 @@ deq.push_back(1);
 deq.push_front(2);
 ```
 
-
-
-# 基本类型
-
-## 有符号、无符号整数
-
-### count_ones
-
-返回 `self` 二进制表示形式中1的个数
-
-```rust
-let number = (i as i32).count_ones();
-```
-
-
+## 动态数组 Vector
 
 # Trait
+
+## Display
+
+### ToString
+
+一个用于将值转换为 `String` 的 trait。对于任何实现 `Display` trait 的类型，都会自动实现 `ToString` trait。 因此，要想获得 `ToString`，应该实现 `Display` 
+
+```rust
+let s = x.to_string();
+```
 
 ## 迭代器 Iterator
 
