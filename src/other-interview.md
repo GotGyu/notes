@@ -126,5 +126,8 @@
 
    ![byte-dance-interview-algorithm](https://blog.sbw.so/picture/art-198-2.png)
 
+   6. 写一个函数，接收两个矩形然后输出是否相交，矩形的数据结构自己设计
+   7. 俩人轮流丢硬币，谁先扔到正面谁羸。A 先扔，然后问他俩的胜率各是多少
+
 # 项目
 
