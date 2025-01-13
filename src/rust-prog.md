@@ -50,6 +50,12 @@ assert_eq!('A', ascii.to_ascii_uppercase());
 
 单元类型就是 `()`，不占用任何内存
 
+## 关键字
+
+### continue
+
+跳到循环的下一个迭代，遇到 `continue` 时，当前迭代终止，将控制权返回到循环头
+
 # 复合类型
 
 ## 切片 slice
@@ -120,6 +126,16 @@ assert_eq!(Some("word"), iter.next());
 
 UTF-8编码的可增长字符串，取引用则转换为 `&str`
 
+### as_bytes
+
+将 `String` 转换为字节切片，不会进行内存的重新分配，只是返回对原始数据的借用，因此字节切片的生命周期与原始 `String` 对象绑定，没有转移所有权
+
+适用场景：只需要字节的不可变引用，且不需要修改原始 `String` 时，选择 `as_bytes` 更高效（不用内存分配）
+
+```rust
+let s = String::from("hello");  // s为&[104, 101, 108, 108, 111]
+```
+
 ### as_str
 
 提取包含整个 `String` 的字符串切片
@@ -152,6 +168,17 @@ if let Some(x) = s.find(|&c| c==val);
 
 ```rust
 let hello = String::from("Hello, world!"); // hello是String类型
+```
+
+### into_bytes
+
+将 `String` 转换为字节vector，会消耗 `String`，并将数据转换为一个新的 `Vec`，所以调用 `into_bytes` 后，原 `String` 的所有权被转移，不能再使用原 `String` 对象
+
+适用场景：需要拥有字节数组的所有权，且不需要原始的 `String` 时
+
+```rust
+let s = String::from("hello");
+let bytes = s.into_bytes();  // bytes=[104,101,108,108,111]
 ```
 
 ### push_str
@@ -236,6 +263,28 @@ deq.push_front(2);
 
 ## 动态数组 Vector
 
+# 其他类型
+
+## Entry
+
+`map` 中单个条目的视图，根据 `entry` 方法构造，可能是占用条目可能是空条目
+
+### and_modify
+
+在任何插入 map 之前，提供对占用条目的就地**可变访问**
+
+```rust
+map.entry("poneyland").and_modify(|e| {*e+=1}).or_insert(42);//map中存储(poneyland, 42)，下一次执行则是(poneyland, 43)
+```
+
+### or_insert
+
+如果为空，则通过插入默认值来确保该值在条目中，并返回对条目中值的可变引用
+
+```rust
+map.entry("poneyland").or_insert(10); //map中存储(poneyland, 10)
+```
+
 # Trait
 
 ## Display
@@ -272,8 +321,6 @@ let a = [1, 2, 3];
 assert_eq!(a.iter().count(), 3);
 ```
 
-
-
 ### enumerate
 
 创建迭代器，返回当前迭代次数以及下一个值的对 `(i, val)`，`i:usize` 是当前迭代索引，`val` 是值
@@ -292,6 +339,15 @@ assert_eq!(iter.next(), Some((0, &'a')));
 let a = [1, 2, 3];
 let mut iter = a.iter();
 assert_eq!(Some(&1), iter.next());
+```
+
+### nth
+
+返回迭代器的第n个元素，计数从0开始，即 `nth(0)` 返回第一个值。所有先前的元素以及返回的元素都将从迭代器中消耗，即经过调用就被丢弃，若在同一迭代器上多次调用 `nth(0)` 将返回不同的元素。函数签名返回 `Option<Self::Item>`
+
+```rust
+let a = [1, 2, 3];
+assert_eq!(a.iter().nth(1), Some(&2));
 ```
 
 ### rev
