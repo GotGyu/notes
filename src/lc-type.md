@@ -1,3 +1,5 @@
+# 题型
+
 ## 二分查找
 
 ```rust
@@ -78,3 +80,24 @@ pub fn convert_to_base7(num: i32)-> String {
 ### 题单
 
 504
+
+## 动态规划
+
+核心是状态定义和状态转移方程
+
+
+
+# 部分功能代码
+
+## 通过下标访问 `String`
+
+Rust 中是不允许通过下标来获取 `String` 的字符的，即若有 `s="Hello".to_string()`，`s[0]`,`s[1]`之类的写法无法通过编译。但这样会造成很多不便，想要实现这个功能时可以：
+
+``` rust
+// 将 s:String 转换为 u8 字节切片
+let S = s.as_bytes();
+// 通过下标访问 S
+count[S[pos] as usize] += 1;
+...
+```
+

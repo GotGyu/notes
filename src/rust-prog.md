@@ -77,6 +77,23 @@ let world = &s[6..11];
 assert_eq!(["hello", "world","Mary"].join(" "), "hello world Mary");
 ```
 
+### sort_unstable_by
+
+```rust
+// 函数签名
+pub fn sort_unstable_by<F>(&mut self, compare: F) 
+where 
+	F: FnMut(&T, &T) -> Ordering
+```
+
+使用比较器函数对切片进行不稳定排序，比较器函数必须为切片中的元素定义总顺序
+
+```rust
+// 对v进行反向排序
+let mut v = [5,4,1,3,2];
+v.sort_unstable_by(|a, b| b.cmp(a));  //v=[5,4,3,2,1]
+```
+
 
 
 ## 字符串切片 str
