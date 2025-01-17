@@ -2,18 +2,43 @@
 
 ## 二分查找
 
+可以写成闭区间、开区间、或者左闭右开区间、或者左开右闭区间，但必须要全程统一，此处的开和闭指的是在本轮循环中是否要判断该数字
+
+为了避免出现负数，使用**左闭右开区间**最方便。不用特判==target的时候返回
+
 ```rust
-let (mut l, mut r) = (1, n);
+// 左闭右开写法
+let (mut l, mut r) = (0, nums.len()); // [l,r)
+// 区间不为空
 while l < r {
-    let mid = l+(r-l)/2;
-    if ... {
-        l = mid;
+    // 循环不变量：nums[left-1] < target, nums[right] >= target
+    // r+l不溢出的话可以这样写，否则写成l+(r-l)/2更加保险
+    let mid = (r+l)/2;
+    if nums[mid] < target {
+        l = mid + 1;
+    } else {
+        r = mid;
+    }
+}
+return left;
+```
+
+```rust
+// 闭区间写法
+let (mut l, mut r) = (0, nums.len()-1); //[l,r]
+while l <= r {
+    // 循环不变量：nums[left-1] < target, nums[right+1] >= target
+    let mid = (r+l)/2;
+    if nums[mid] < target {
+        l = mid + 1;
     } else {
         r = mid - 1;
     }
 }
 return left;
 ```
+
+
 
 ## 单调栈
 
