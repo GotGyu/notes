@@ -213,9 +213,71 @@ s.push_str("bar");  // s:String=foobar
 
 # 集合类型
 
+## 二进制堆 BinaryHeap
+
+大根堆（任一节点大于其子节点的值），每次更改堆结构都会重新维护为大根堆
+
+导入：`use std::collections::BinaryHeap;`
+
+### min-heap
+
+`std::cmp::Reverse` 或自定义 `Ord` 实现可用于使 `BinaryHeap` 成为小根堆，从而`heap.pop()` 返回最小值而非最大值
+
+``` rust
+use std::collections::BinaryHeap;
+use std::cmp::Reverse;
+
+let mut heap = BinaryHeap::new();
+
+// 在 `Reverse` 中包装值
+heap.push(Reverse(1));
+heap.push(Reverse(5));
+heap.push(Reverse(2));
+
+// 如果我们现在弹出这些分数，它们应该以相反的顺序返回。
+assert_eq!(heap.pop(), Some(Reverse(1)));
+assert_eq!(heap.pop(), Some(Reverse(2)));
+assert_eq!(heap.pop(), Some(Reverse(5)));
+assert_eq!(heap.pop(), None);
+```
+
+### from
+
+可以从数组初始化具有已知项列表的 `BinaryHeap`
+
+```rust
+let heap = BinaryHeap::from([1, 5, 2]);
+```
+
+### peek
+
+返回 `BinaryHeap` 中最大的项，若为空则返回 `None`
+
+```rust
+if let Some(x) = heap.peek();
+```
+
+### pop
+
+从`BinaryHeap` 中**删除**最大的项并返回它，若为空则返回 `None`
+
+``` rust
+if let Some(x) = heap.peek();
+```
+
+### push
+
+将项推入 `BinaryHeap` 。预期成本是 *O*(1)，该成本是在被推元素的每个可能排序以及足够大量的推数上平均的，当元素尚未处于任何排序模式的元素时，这是最有意义的成本指标；如果元素主要以升序推入，则时间复杂度会升高。
+
+```rust
+heap.push(5);
+```
+
+
+
 ## 哈希表 HashMap
 
-导入：use std::collections::HashMap
+导入：`use std::collections::HashMap;`
 
 ### entry
 
