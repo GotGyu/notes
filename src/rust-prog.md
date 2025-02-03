@@ -69,6 +69,25 @@ let hello = &s[0..5];
 let world = &s[6..11];
 ```
 
+### binary_search
+
+```rust
+// 函数签名
+pub fn binary_search(&self, x: &T) -> Result<usize, usize>
+where
+    T: Ord,
+```
+
+在给定切片中搜索给定元素，切片需要经过排序。如果找到该值，则返回 `Result::Ok` 表示匹配元素的索引，如果有多个则可以返回任何一个索引；如果找不到，则返回 `Result::Err`，其中包含在保留排序顺序的同时可以在其中插入匹配元素的索引
+
+```rust
+let s = [0,1,2,3,5,13];
+assert_eq!(s.binary_search(&13),  Ok(5));
+assert_eq!(s.binary_search(&4),   Err(4));
+```
+
+
+
 ### join
 
 将 `T` 的切片展平为单个值 `Self::Output`，并在每个值之间放置一个给定的分隔符
@@ -288,6 +307,14 @@ heap.push(5);
 *map.entry(c).or_insert(0) += 1;
 ```
 
+### get
+
+返回与键对应的值的**引用**，键需要以**借用形式**提供
+
+```rust
+assert_eq!(map.get(&1), Some(&"a"));
+```
+
 ### keys
 
 以任意顺序访问HashMap所有键的迭代器，可以遍历HashMap的key
@@ -341,6 +368,43 @@ deq.push_front(2);
 ```
 
 ## 动态数组 Vector
+
+### into_iter
+
+返回 `Vec` 上的实现 `IntoIterator` 特质的迭代器，该迭代器遍历 `Vec` 中的元素并返回它们的**所有权**，即元素本身，类型为 `T`，也即该方法会消耗 `Vec`，迭代结束后，原始的 `Vec` 不再拥有所有权，变为空。
+
+### iter （比 into_iter更高效）
+
+返回 `Vec` 上的实现 `Iterator` 特质的迭代器，该迭代器遍历 `Vec` 中的元素并返回它们的**不可变引用**，遍历获得项时数据类型是 `&T`，即返回的是引用而不是值本身，原因有二：
+
+1. **性能**：返回引用可以避免不必要的复制，特别是当元素类型较大或复制成本较高时。
+2. **所有权**：`Vec` 仍然拥有其元素的所有权，而迭代器只是提供了一种访问这些元素的方式，通过返回引用，Rust 能够确保 `Vec` 的所有权语义不会被破坏。
+
+```rust
+for &x in v.iter() {
+    // 此时x是T类型
+    //...
+}
+```
+
+
+
+### resize
+
+``` rust
+// 函数签名
+pub fn resize(&mut self, new_len: usize, value:T)
+```
+
+调整 `Vec` 的大小，使得 `len = new_len`，如果 `new_len` 大于 `len`，那么`Vec` 将会向后扩充，并用 `value` 填满，否则将 `Vec` 截断。
+
+`T` 需要实现 `Clone`
+
+```rust
+let mut vec = vec!["hello"];
+vec.resize(3, "world");
+assert_eq!(vec, ["hello", "world", "world"]);
+```
 
 # 其他类型
 
