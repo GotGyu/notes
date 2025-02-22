@@ -14,6 +14,39 @@
 let number = (i as i32).count_ones();
 ```
 
+### 在线程间安全共享的整数类型 AtomicU64
+
+原子类型，用于在多线程环境中安全地操作 `u64` 类型的值，能够在不使用锁的情况下实现线程安全的操作，比使用锁的方案性能更高，同样还有其他类型值的原子版本，这里只记录 `u64` 的。
+
+```rust
+// 导入方式
+use std::sync::atomic::AtomicU64
+```
+
+#### new
+
+创建一个新的原子整数
+
+```rust
+let atomic = AtomicU64::new(42); //于是atomic=42
+```
+
+#### fetch_add
+
+```rust
+// 签名，需要一个 ordering 参数来描述操作的内存顺序
+pub fn fetch_add(&self, val: u64, order: Ordering) -> u64
+```
+
+加到当前值，返回前一个值
+
+```rust
+let foo = AtomicU64::new(0);
+let ret = foo.fetch_add(10, Ordering::SeqCst);  // ret=0, foo=10
+```
+
+
+
 ## 字符 char
 
 ### is_lowercase/is_uppercase
@@ -55,6 +88,43 @@ assert_eq!('A', ascii.to_ascii_uppercase());
 ### continue
 
 跳到循环的下一个迭代，遇到 `continue` 时，当前迭代终止，将控制权返回到循环头
+
+### ref
+
+在使用 `let` 绑定进行模式匹配或解构时，可以使用 `ref` 关键字来获取结构体或元组字段的**引用**。下面的代码是只能使用 `ref` 而不能使用 `&` 的情况，如果 `t` 前面不加 `ref`，则无法编译，因为 `s` 的所有权转交给 `t` 了
+
+```rust
+let s = Some(String::from("Hello"));
+match s {
+    Some(ref t) => println!("t={}", t);
+    _ => {}
+}
+println!("s={}", s.unwrap());
+```
+
+或者可以这样写：
+
+```rust
+let s = Some(String::from("Hello"));
+match &s {
+    Some(t) => println!("t={}", t);
+    _ => {}
+}
+println!("s={}", s.unwrap());
+```
+
+赋值左侧的 `ref` 借用等同于右侧的 `&` 借用，也就是下面两句相等：
+
+```rust
+let ref ref_c1 = c;
+let ref_c1 = &c;
+```
+
+
+
+### static
+
+静态项，在程序的整个持续时间内有效，不会在程序结束时调用 `drop`，静态项不能移动，可以修改
 
 # 复合类型
 
@@ -292,7 +362,11 @@ if let Some(x) = heap.peek();
 heap.push(5);
 ```
 
+## B树 BTreeMap
 
+基于B树的**有序**map，支持范围查询和按顺序遍历，非常适合需要按顺序访问键值对的场景。
+
+使用B树作为底层数据结构，是一种自平衡树，表示缓存效率与实际最小化搜索中执行的工作量之间的根本折衷，其特性使得在大多数操作（查找、插入、删除）上的时间复杂度为 `O(log n)`
 
 ## 哈希表 HashMap
 
@@ -335,7 +409,9 @@ for value in map.values() {
 }
 ```
 
+### 哈希集 HashSet
 
+一种基于哈希表的数据结构，通过哈希函数来组织数据，以支持快速的插入和搜索操作。哈希集中每个元素都是唯一的，不允许重复，与插入顺序无关。
 
 ## 双端队列 VecDeque
 
@@ -406,6 +482,48 @@ vec.resize(3, "world");
 assert_eq!(vec, ["hello", "world", "world"]);
 ```
 
+# 智能指针
+
+## 原子引用计数 Arc
+
+原子化的 `Rc<T>` 智能指针，与 `Rc<T>` 功能相似但是多线程安全。原子化是一种并发原语，它能保证数据安全的在线程间共享。比 `Rc<T>` 性能损耗大不少，和 `Rc` 拥有完全一样的 API，故全记录在 `Rc`章节中。
+
+在多线程编程中，`Arc` 与 `Mutex` 锁的组合使用非常常见，这样既可以在不同的线程中共享数据，又允许在各个线程中对其进行修改。
+
+```rust
+// 引入方式
+use std::sync::Arc
+```
+
+## 引用计数 Rc
+
+引用计数，Reference Counting，通过记录一个数据被引用的次数来确定该数据是否正在被使用，当次数归零时，就代表该数据不再被使用，因此可以清理释放。当**希望在堆上分配一个对象供程序的多个部分使用，且无法确定哪个部分最后一个结束**时，就可以使用 `Rc` 成为数据值的所有者，比如多线程场景。
+
+`Rc<T>` 是指向底层数据的不可变引用，无法通过它来修改数据。若需修改，需配合其他数据类型，如内部可变性的 `RefCell<T>`、互斥锁 `Mutex<T>`。一旦最后一个拥有者小时，资源会自动回收，生命周期在编译器就会被确定。`Rc` 只能用于同一线程内部（因为没有实现 `Send` 特征），如果需要跨线程就需使用 `Arc`。`Rc<T>` 是一个实现了 `Deref` 特征的智能指针，使用 `T` 时无需先解开 `Rc` 指针，而可以直接使用。
+
+```rust
+// 引入方式
+use std::rc::Rc
+```
+
+### clone
+
+浅拷贝
+
+### strong_count
+
+`Rc<T>` 在创建时，会将引用计数+1，此时执行 `Rc::strong_count` 会返回 1
+
+
+
+## 互斥锁 Mutex
+
+同一时间，只允许一个线程访问该值，其他线程需要等待其访问完成后才能继续
+
+### lock
+
+要使用 `m.lock()` 方法向 `m=Mutex::new(5)` 申请一个锁，该方法会阻塞当前线程，直至获取到锁。可能会报错，如当前正持有锁的线程 `panic` 了。该方法返回一个智能指针 `MutexGuard<T>`，它实现了 `Deref` 特征和 `Drop` 特征
+
 # 其他类型
 
 ## Entry
@@ -428,7 +546,21 @@ map.entry("poneyland").and_modify(|e| {*e+=1}).or_insert(42);//map中存储(pone
 map.entry("poneyland").or_insert(10); //map中存储(poneyland, 10)
 ```
 
+## 类型别名 type
+
+类型别名不是一个独立的全新的类型，而是某一个类型的别名，使用它只是为了让可读性更好，比如：
+
+```rust
+type Meters = u32;
+```
+
+则编译器会把 `Meters` 当作 `u32` 来使用
+
 # Trait
+
+## Debug
+
+用于格式化输出一个类型的调试信息，`println!("{:?}", value)` 通过 `{:?}` 格式化占位符来打印实现了 `Debug` trait 的值。使用 `#[derive(Debug)]` 会自动为结构体或枚举（需要其中所有字段都实现 `Debug` trait）生成 `Debug` trait 的实现代码
 
 ## Display
 
