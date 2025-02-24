@@ -224,12 +224,41 @@ count[S[pos] as usize] += 1;
 ...
 ```
 
+`as_bytes()` 是将字符串转换为字节序列，这在处理非ASCII字符时会导致问题，更万全的方法是使用字符迭代：
+
+```rust
+// s:String
+let s = s.chars().collect::<Vec<_>>();  
+```
+
+
+
 ## 将 `HashMap` 转换为 `Vec`
 
 很多数据结构都可以通过这种方法进行转换
 
 ``` rust
 let mut v:Vec<(i32,i32)> = map.into_iter().collect();
+```
+
+## 单链表
+
+```rust
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct ListNode {
+   pub val: i32,
+   pub next: Option<Box<ListNode>>
+}
+
+impl ListNode {
+   #[inline]
+   fn new(val: i32) -> Self {
+       ListNode {
+       		next: None,
+        	val
+       }
+	}
+}
 ```
 
 
