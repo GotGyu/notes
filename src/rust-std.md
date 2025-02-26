@@ -85,6 +85,14 @@ assert_eq!('A', ascii.to_ascii_uppercase());
 
 ## 关键字
 
+### async
+
+Rust选择的异步编程模型。通过 `async` 标记的语法块会被转换成实现了 `Future` trait 的状态机。**返回封装了函数返回值的 `Future`**，而不是阻塞当前线程，会让出当前线程的控制权，让其他 `Future` 在该线程中运行。
+
+### await
+
+调用者可以使用 `.await` 来暂停执行、让出线程，直到 `Future` 的结果准备就绪为止，并且还解析出最终的返回值。相当于对 `executor` 说：“等这个 `Future` 完成后再恢复我”。
+
 ### continue
 
 跳到循环的下一个迭代，遇到 `continue` 时，当前迭代终止，将控制权返回到循环头
@@ -127,6 +135,17 @@ let ref_c1 = &c;
 静态项，在程序的整个持续时间内有效，不会在程序结束时调用 `drop`，静态项不能移动，可以修改
 
 # 复合类型
+
+## 固定指针 Pin
+
+```rust
+// 实现
+pub struct Pin<P> {
+    pointer: P,
+}
+```
+
+包装一个指针，并且能确保该指针指向的数据不会被移动，除非它实现 `Unpin`
 
 ## 切片 slice
 
@@ -482,6 +501,34 @@ vec.resize(3, "world");
 assert_eq!(vec, ["hello", "world", "world"]);
 ```
 
+# 错误处理
+
+## expect
+
+返回包含 `self` 值的 `Some` 值，如果 `self` 为 `None` 则会 `panics`，并输出由 `msg` 提供的自定义 `panic` 消息
+
+```rust
+use std::fs::File;
+
+fn main() {
+    let f = File::open("hello.txt").expect("Failed to open hello.txt");
+}
+```
+
+## unwrap
+
+返回包含 `self` 值的 `Some` 值，如果 `self` 为 `None`则会 `panics`，所以通常不建议使用
+
+```rust
+use std::fs::File;
+
+fn main() {
+    let f = File::open("hello.txt").unwrap();
+}
+```
+
+
+
 # 智能指针
 
 ## 原子引用计数 Arc
@@ -494,6 +541,15 @@ assert_eq!(vec, ["hello", "world", "world"]);
 // 引入方式
 use std::sync::Arc
 ```
+
+## 堆对象分配 Box
+
+`Box<T>` 允许将一个值分配到堆上，然后在栈上保留一个智能指针指向堆上的数据。是比较简单、高效的智能指针使用场景：
+
+- 特意的将数据分配在堆上
+- 数据较大时，又不想在转移所有权时进行数据拷贝
+- 类型的大小在编译期无法确定，但是我们又需要固定大小的类型时
+- 特征对象，用于说明对象实现了一个特征，而不是某个特定的类型
 
 ## 引用计数 Rc
 
@@ -561,6 +617,32 @@ type Meters = u32;
 ## Debug
 
 用于格式化输出一个类型的调试信息，`println!("{:?}", value)` 通过 `{:?}` 格式化占位符来打印实现了 `Debug` trait 的值。使用 `#[derive(Debug)]` 会自动为结构体或枚举（需要其中所有字段都实现 `Debug` trait）生成 `Debug` trait 的实现代码
+
+## Deref
+
+只能为智能指针实现的 trait，允许自定义类型像引用一样被解引用（`*` 运算符），使智能指针的行为类似于普通引用
+
+```rust
+use std::ops::Deref;
+
+struct MyBox<T>(T);
+
+impl<T> Deref for MyBox<T> {
+    type Target = T;  // 关联类型，指向的目标类型
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+fn main() {
+    let x = MyBox(5);
+    assert_eq!(*x, 5);  // `*x` 实际上调用了 `deref`，变成 `*(x.deref())`
+}
+
+```
+
+
 
 ## Display
 
@@ -634,6 +716,51 @@ assert_eq!(a.iter().nth(1), Some(&2));
 let ans = s.chars().rev().collect()
 ```
 
+## Future
+
+异步编程的核心，可以理解为一个在未来某个时间点被调度执行的任务。
+
+## Stream
+
+类似于 `Future` trait，但在完成前可以生成多个值，这一点类似于 `Iterator` trait
+
+```rust
+// 实现
+trait Stream {
+    // Stream生成的值的类型
+    type Item;
+
+    // 尝试去解析Stream中的下一个值,
+    // 若无数据，返回`Poll::Pending`,
+    // 若有数据，返回 `Poll::Ready(Some(x))`
+    // `Stream`完成则返回 `Poll::Ready(None)`
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>)
+        -> Poll<Option<Self::Item>>;
+}
+```
+
+可以对 `Stream` 进行迭代访问，例如使用 `map, filter, fold` 等方法。可以用 `while let, next, try_next`，但不可以用 `for` 循环
+
+```rust
+// 一个Stream并发处理多个值
+// 入参 stream 是一个指向流的可变引用，每个元素的类型是 Result<u8, io::Error>
+async fn jump_around(
+    mut stream: Pin<&mut dyn Stream<Item = Result<u8, io::Error>>>,
+) -> Result<(), io::Error> {
+    use futures::stream::TryStreamExt; // 引入这个trait为流提供了许多辅助函数，比如 `try_for_each_concurrent`用于并发地处理流中的元素
+    const MAX_CONCURRENT_JUMPERS: usize = 100;
+
+    stream.try_for_each_concurrent(MAX_CONCURRENT_JUMPERS, |num| async move {
+        // 此处是对流的每个元素进行的异步操作
+        jump_n_times(num).await?;
+        report_n_jumps(num).await?;
+        Ok(())
+    }).await?;
+
+    Ok(())
+}
+```
+
 
 
 # 宏
@@ -649,5 +776,52 @@ let ans = s.chars().rev().collect()
 ```rust
 // 将数字以时间形式放进vec中
 vec.push(format!("{}:{}", i, j));
+```
+
+## join
+
+**同时**轮询多个 futures，完成后，返回所有结果的元组。虽然 `join!(a, b).await` 类似于 `(a.await, b.await)`，但 `join!` 会同时轮询两个 futures，因此效率更高。
+
+```rust
+#![feature(future_join)]
+
+use std::future::join;
+
+async fn one() -> usize { 1 }
+async fn two() -> usize { 2 }
+
+let x = join!(one(), two()).await;
+assert_eq!(x, (1, 2));
+```
+
+## panic
+
+一定是遇到**不可恢复的错误**时才调用 `panic!` 处理。
+
+若你确切的知道你的程序是正确时，也可以使用 `unwrap`、 `panic` 等处理，因为 `panic` 的触发方式比写错误处理要简单，可以让代码更简洁、好读。比如：
+
+```rust
+use std::net::IpAddr;
+let home: IpAddr = "127.0.0.1".parse().unwrap();
+```
+
+此时知道 `parse` 方法一定会成功，就可以直接调用 `unwrap`，但如果这个字符串来自用户输入，在实际项目中，就必须用错误处理。
+
+## ?
+
+一个适合用来**传播Result、转换错误类型**的宏，作用类似于 `match`，如果结果是 `Ok(T)`，就把 `T` 赋值给变量，如果结果是 `Err(E)`，那就返回错误。原理在于隐式调用了 `from` 方法，支持链式调用。
+
+```rust
+fn last_char_of_first_line(text: &str) -> Option<char> {
+    text.lines().next()?.chars().last()
+}
+```
+
+由于 `?` 要么返回 `None`，要么返回 `T`（而非 `Some<T>`），所以需要一个变量来承载正确的值，因此以下写法是错误的：
+
+```rust
+fn first(arr: &[i32]) -> Option<&i32> {
+   arr.get(0)? // 在0号元素存在的时候返回类型为&i32
+}
 ```
 
