@@ -716,6 +716,14 @@ assert_eq!(a.iter().nth(1), Some(&2));
 let ans = s.chars().rev().collect()
 ```
 
+### take
+
+```rust
+fn take(self, n:usize) -> Take<Self>
+```
+
+创建一个迭代器，`take(n)` 返回包含前`n` 个元素的迭代器，如果个数小于 `n` ，就返回所有元素
+
 ## Future
 
 异步编程的核心，可以理解为一个在未来某个时间点被调度执行的任务。
