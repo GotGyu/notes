@@ -97,6 +97,42 @@ Rust选择的异步编程模型。通过 `async` 标记的语法块会被转换�
 
 跳到循环的下一个迭代，遇到 `continue` 时，当前迭代终止，将控制权返回到循环头
 
+### dyn
+
+是 trait 对象类型的前缀，用于强调关联 trait 上的方法是动态分配的（`impl` 是静态分配）。由于编译器不知道被传递的具体类型，所有 `dyn` trait 引用包含两个指针，一个指针指向方法调用名称与函数指针的映射。
+
+由于 Rust 编译器需要知道每个函数的返回类型需要多少空间，即所有函数都必须返回一个具体类型，以下代码中有 `Animal` trait，但不能编写返回 `Animal` 的函数，因为其不同的实现需要不同的内存量，所以可以选择返回一个包含一些 `Animal` 的 `Box`，`Box` 是一个引用，引用的大小是静态已知的。因此，如果函数需要返回指向堆的 trait 的指针，需要使用 `dyn` 编写返回类型。
+
+```rust
+pub trait Animal {
+    fn noise(&self);
+}
+
+pub struct Sheep {}
+
+pub struct Cow {}
+
+impl Animal for Sheep {
+    fn noise(&self){
+        println!("mamamama!");
+    }
+}
+
+impl Animal for Cow {
+    fn noise(&self) {
+        println!("moooooo!");
+    }
+}
+
+fn random_animal(random_number: f64) -> Box<dyn Animal> {
+    if random_number < 0.5 {
+        Box::new(Sheep {})
+    } else {
+        Box::new(Cow {})
+    }
+}
+```
+
 ### ref
 
 在使用 `let` 绑定进行模式匹配或解构时，可以使用 `ref` 关键字来获取结构体或元组字段的**引用**。下面的代码是只能使用 `ref` 而不能使用 `&` 的情况，如果 `t` 前面不加 `ref`，则无法编译，因为 `s` 的所有权转交给 `t` 了
@@ -531,6 +567,8 @@ fn main() {
 
 # 智能指针
 
+智能主要体现在实现了 `Deref` 和 `Drop` 特征
+
 ## 原子引用计数 Arc
 
 原子化的 `Rc<T>` 智能指针，与 `Rc<T>` 功能相似但是多线程安全。原子化是一种并发原语，它能保证数据安全的在线程间共享。比 `Rc<T>` 性能损耗大不少，和 `Rc` 拥有完全一样的 API，故全记录在 `Rc`章节中。
@@ -550,6 +588,32 @@ use std::sync::Arc
 - 数据较大时，又不想在转移所有权时进行数据拷贝
 - 类型的大小在编译期无法确定，但是我们又需要固定大小的类型时
 - 特征对象，用于说明对象实现了一个特征，而不是某个特定的类型
+
+## RefCell
+
+用于解决可变、不可变引用共存的需求，实现编译期可变、不可变引用共存，但违背借用规则仍然会在程序运行期 `panic`，适用于编译期误报或者一个引用被在多处代码使用、修改以至于难于管理借用关系时。主要用于实现内部可变性。
+
+```rust
+use std::cell::RefCell;
+use std::rc::Rc;
+fn main() {
+    let s = Rc::new(RefCell::new("我很善变，还拥有多个主人".to_string()));
+
+    let s1 = s.clone();
+    let s2 = s.clone();
+    // let mut s2 = s.borrow_mut();
+    s2.borrow_mut().push_str(", oh yeah!");
+
+    println!("{:?}\n{:?}\n{:?}", s, s1, s2);
+}
+
+// 运行结果：
+// RefCell { value: "我很善变，还拥有多个主人, oh yeah!" }
+// RefCell { value: "我很善变，还拥有多个主人, oh yeah!" }
+// RefCell { value: "我很善变，还拥有多个主人, oh yeah!" }
+```
+
+
 
 ## 引用计数 Rc
 
@@ -576,9 +640,33 @@ use std::rc::Rc
 
 同一时间，只允许一个线程访问该值，其他线程需要等待其访问完成后才能继续
 
+```rust
+use std::sync::Mutex;
+```
+
+### new
+
+创建新的互斥锁实例
+
+```rust
+let m = Mutex::new(5);
+```
+
 ### lock
 
-要使用 `m.lock()` 方法向 `m=Mutex::new(5)` 申请一个锁，该方法会阻塞当前线程，直至获取到锁。可能会报错，如当前正持有锁的线程 `panic` 了。该方法返回一个智能指针 `MutexGuard<T>`，它实现了 `Deref` 特征和 `Drop` 特征
+要使用 `m.lock()` 方法向 `m=Mutex::new(5)` 申请一个锁，该方法会**阻塞当前线程，直至获取到锁**。可能会报错，如当前正持有锁的线程 `panic` 了。该方法返回一个智能指针 `MutexGuard<T>`，它实现了 `Deref` 特征和 `Drop` 特征
+
+```rust
+{
+    // 获取锁，然后deref为`m`的引用
+    // lock返回的是Result
+    let mut num = m.lock().unwrap();
+    *num = 6;
+    // 锁自动被drop
+}
+```
+
+
 
 # 其他类型
 
@@ -602,6 +690,10 @@ map.entry("poneyland").and_modify(|e| {*e+=1}).or_insert(42);//map中存储(pone
 map.entry("poneyland").or_insert(10); //map中存储(poneyland, 10)
 ```
 
+## PhantomData
+
+一个标记类型，用于在类型系统中表示某种“假想”的数据关系，**实际上并不占用任何内存空间**。
+
 ## 类型别名 type
 
 类型别名不是一个独立的全新的类型，而是某一个类型的别名，使用它只是为了让可读性更好，比如：
@@ -620,7 +712,7 @@ type Meters = u32;
 
 ## Deref
 
-只能为智能指针实现的 trait，允许自定义类型像引用一样被解引用（`*` 运算符），使智能指针的行为类似于普通引用
+**只能为智能指针实现**的 trait，允许自定义类型像普通引用一样被解引用（`*` 运算符），使智能指针的行为类似于普通引用。
 
 ```rust
 use std::ops::Deref;
@@ -642,7 +734,7 @@ fn main() {
 
 ```
 
-
+一个类型为 `T` 的对象 `foo`，如果 `T: Deref<Target=U>`，那么，相关 `foo` 的**引用** `&foo` 在应用的时候会自动转换为 `&U`。仅引用类型的实参才会触发自动解引用，支持连续的隐式转换，如 `Box<String> -> String -> &str`
 
 ## Display
 
@@ -653,6 +745,14 @@ fn main() {
 ```rust
 let s = x.to_string();
 ```
+
+## Drop
+
+用于回收内存资源、执行收尾工作，Rust 为几乎所有类型都实现了 `Drop` trait，但是有极少数情况，需要你自己来回收资源的，例如文件描述符、网络 socket 等，需要手动 `Drop`。`Copy` 和 `Drop` 无法同时实现在一个类型上。
+
+## Future
+
+异步编程的核心，可以理解为一个在未来某个时间点被调度执行的任务。
 
 ## 迭代器 Iterator
 
@@ -724,9 +824,7 @@ fn take(self, n:usize) -> Take<Self>
 
 创建一个迭代器，`take(n)` 返回包含前`n` 个元素的迭代器，如果个数小于 `n` ，就返回所有元素
 
-## Future
 
-异步编程的核心，可以理解为一个在未来某个时间点被调度执行的任务。
 
 ## Stream
 

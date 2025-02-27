@@ -21,9 +21,69 @@ lazy_static = "1.5.0"
 
 # tokio
 
+一个用于编写可靠网络应用且不牺牲性能的运行时，是一个事件驱动的非阻塞 `I/O` 平台，用于编写异步应用程序，主要提供几个组件：
+
+- 处理异步任务的工具，包括同步原语和通道以及超时、休眠和间隔；
+- 用于执行异步 I/O 的 API，包括 TCP 和 UDP 套接字、文件系统操作以及进程和信号管理；
+- 用于执行异步代码的运行时，包括一个任务调度器、一个由操作系统事件队列（epoll、kqueue、IOCP 等）支持的 I/O 驱动程序和一个高性能定时器。
+
+## 模块
+
+```rust
+// 依赖
+tokio = { version = "1", features = ["full"] } // full
+tokio = { version = "1", features = ["rt", "net"] } // just need tokio::spawn ang TcpStream
+```
+
+### tokio::task
+
+通过 `rt` feature flag 开启，Rust 中的异步程序是以轻量级、无阻塞的执行单元（称为 `tasks`）为基础的，该模块提供了处理 `tasks` 的重要工具：
+
+- `spawn` 函数和 `JoinHandle` 类型，分别用于在 `Tokio` 运行时调度新 `task` 和等待一个已创建的 `task` 的输出
+- 在异步任务上下文中运行阻塞操作的函数
+
+### tokio::sync
+
+通过 `sync` feature flag 开启，包含在需要通信或共享数据时使用的同步原语，这些原语包括：
+
+- 用于在任务间发送值的通道如 `oneshot, mpscm watch, broadcast`
+- 用于控制对共享、可变值的访问的非阻塞 `Mutex`
+- 用于在开始计算前同步多个任务的异步 `Barrier` 类型
+
+### tokio::time
+
+通过 `time` feature flag 开启，提供了用于跟踪时间和调度的实用程序，其中包括：
+
+- 为`tasks` 设置计时器
+- 停止运行、在未来继续运行
+- 在一定时间间隔内重复操作的功能。
+
+### tokio::io
+
+提供了异步核心 I/O 原语、和 `AsyncRead`, `AsyncWrite`,`AsyncBufRead` traits。当开启 `io-util` feature flag 时，还提供与这些 traits 相关的combinator和函数。
+
+### tokio::net
+
+通过 `net` feature flag 开启，包含 TCP、UDP 和 Unix 域套接字的非阻塞版本
+
+### tokio::fs
+
+通过 `fs` feature flag 开启，用于异步执行文件系统 I/O
+
+### tokio::signal
+
+通过 `s` feature flag 开启，用于异步处理 Unix 和 Windows操作系统信号
+
+### tokio::process
+
+通过 `process` feature flag 开启，用于生成和管理子进程
+
 ## 使用场景
 
-- CPU 密集的任务尤其需要用线程的方式去处理，例如使用 `spawn_blocking` 创建一个阻塞的线程去完成相应 CPU 密集任务
+- `Tokio` 可以通过在每个线程上重复交换当前运行的任务，在几个线程上**并发运行多个任务**。 不过，这种交换只能在 `.await` 点进行，因此长时间不进行 `.await` 的代码会妨碍其他任务的运行。为了解决这个问题，Tokio 提供了两种线程：**核心线程**和**阻塞线程**。
+- **核心线程**是所有异步代码运行的地方，`Tokio` 默认会为每个 CPU 核生成一个线程。 可以使用环境变量 `TOKIO_WORKER_THREADS` 来覆盖默认值。
+
+- **阻塞线程**是按需生成的，可用于运行阻塞代码，这会阻塞其他任务的运行，并在一定时间内不使用时保持存活，这可以通过 `thread_keep_alive` 进行配置。 由于 `Tokio` 无法像异步代码那样交换阻塞任务，因此阻塞线程的数量上限非常大。 要生成阻塞任务，应使用 `spawn_blocking` 函数。比如 CPU 密集的任务尤其需要用阻塞线程的方式去处理，使用 `spawn_blocking` 创建一个阻塞的线程去完成相应 CPU 密集任务。
 
 ## 实现原理
 
