@@ -551,6 +551,58 @@ fn main() {
 }
 ```
 
+## Option
+
+### and_then
+
+将一个可能为 `None` 或 `Err` 的值转换为另一个可能为 `None` 或 `Err`的值，同时避免嵌套的 `match` 或 `if let` 语句，支持链式调用。
+
+- 如果当前值是 `Some` 或 `Ok`，则对其内部值应用一个函数，并返回该函数的结果
+- 如果当前值是 `None` 或 `Err`，则直接返回
+
+适合处理需要连续操作多个可能失败的计算的场景
+
+```rust
+fn divide(a: f64, b: f64) -> Option<f64> {
+    if b == 0.0 {
+        None
+    } else {
+        Some(a / b)
+    }
+}
+
+fn main() {
+    let result = Some(10.0)
+        .and_then(|x| divide(x, 2.0)) // 10.0 / 2.0 = 5.0
+        .and_then(|x| divide(x, 0.0)); // 5.0 / 0.0 = None
+
+    println!("{:?}", result); // 输出: None
+}
+```
+
+
+
+### as_mut
+
+将 `&mut Option<T>` 转换为 `Option<&mut T>`
+
+```rust
+let mut x = Some(2);
+match x.as_mut() {
+    Some(v) => *v = 42,
+    None => {},
+}
+assert_eq!(x, Some(42));
+```
+
+### as_ref
+
+从 `&Option<T>` 转换为 `Option<&T>`
+
+### is_some
+
+如果是 `Some` 值，返回 `true`，否则为 `false`
+
 ## unwrap
 
 返回包含 `self` 值的 `Some` 值，如果 `self` 为 `None`则会 `panics`，所以通常不建议使用
@@ -931,3 +983,10 @@ fn first(arr: &[i32]) -> Option<&i32> {
 }
 ```
 
+自动解引用，比如在列表中，`q` 是一个 `ListNode` 结点，那么：
+
+- `q.next` 返回 `Option<Box<ListNode>>`
+- `q.next.as_ref()` 会从 `Option` 中获得内部值的引用，即转换为 `Option<&Box<ListNode>>`
+- `q.next.as_ref()?` ：
+  - 如果 `q.next`是 `None`，则 `?`会提前返回 `None`，避免对 `None`进行解引用
+  - 如果 `q.next`是 `Some(Box<ListNode>)`，则 `?`会解引用 `&Box<ListNode>`，得到 `&ListNode`
