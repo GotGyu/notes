@@ -241,37 +241,6 @@ let s = s.chars().collect::<Vec<_>>();
 let mut v:Vec<(i32,i32)> = map.into_iter().collect();
 ```
 
-## 单链表定义
-
-```rust
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct ListNode {
-   pub val: i32,
-   pub next: Option<Box<ListNode>>
-}
-
-impl ListNode {
-   #[inline]
-   fn new(val: i32) -> Self {
-       ListNode {
-       		next: None,
-        	val
-       }
-	}
-}
-```
-
-## 遍历单链表
-
-```rust
-let mut cur = &list;
-// 等价于let mut cur = list.as_ref();
-while let Some(node) = cur {
-    println!("{}", node.val);
-    cur = &node.next;
-}
-```
-
 
 
 # 技巧
@@ -285,35 +254,3 @@ while let Some(node) = cur {
 1. 异或：^
 2. 
 
-## 链表需注意
-
-1. 同一个链表，不能拥有两个可变的双指针指向内部元素，如下面的代码就是错误的：
-
-   ```rust
-   let mut p = head;
-   let mut q = head.next;
-   // 会编译失败
-   ```
-
-2. 拆分链表后，就可以有两个拥有所有权的链表变量，用 `node.next.take()` 拆分
-
-   ```rust
-   remain = node1.next.take();
-   // 用 take() 将 node1 打断，返回值n1节点后的剩余节点
-   // take()是用默认值替换原有的值，所以node1.next就变为None
-   ```
-
-3. 用**可变引用**来跟踪链表结尾
-
-    ```rust
-    let mut head = ListNode::new(0);
-    let mut tail = &mut result;
-    // tail的类型是head的可变引用，同时tail是可变的
-    // ...
-    tail.next = Some(n1);
-    tail = tail.next.as_mut().unwrap();
-    // 持续跟踪链表结尾
-    // 不能用head赋值，会导致所有权变化
-    ```
-
-   
