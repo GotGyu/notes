@@ -419,9 +419,13 @@ heap.push(5);
 
 ## B树 BTreeMap
 
-基于B树的**有序**map，支持范围查询和按顺序遍历，非常适合需要按顺序访问键值对的场景。
+基于B树的**有序**map，支持范围查询和按顺序遍历，非常适合需要**按顺序访问键值对**的场景。
 
 使用B树作为底层数据结构，是一种自平衡树，表示缓存效率与实际最小化搜索中执行的工作量之间的根本折衷，其特性使得在大多数操作（查找、插入、删除）上的时间复杂度为 `O(log n)`
+
+## Bset BTreeSet
+
+基于B树的**有序**set，其中的元素需要实现 `Ord`, `PartialOrd` trait
 
 ## 哈希表 HashMap
 
@@ -443,6 +447,16 @@ heap.push(5);
 ```rust
 assert_eq!(map.get(&1), Some(&"a"));
 ```
+
+### from_iter
+
+从迭代器构建 `HashMap`
+
+```rust
+let map = HashMap::from_iter(vec);
+```
+
+
 
 ### keys
 
@@ -830,6 +844,23 @@ let a = [1, 2, 3];
 assert_eq!(a.iter().count(), 3);
 ```
 
+### fold
+
+需要两个参数：
+
+- 初始值
+- 闭包：闭包含有两个参数，累加器、元素
+
+闭包返回累加器在下一次迭代中应具有的值，初始值是累加器在第一次调用时将具有的值。`fold()` 通过应用操作将每个元素 `fold` 到一个累加器中，返回最终结果
+
+```rust
+let a = [1,2,3];
+let sum = a.iter().fold(0, |acc, x| acc+x);  //sum=6
+// 0是初始值，|acc,x|是闭包，acc是迭代器，x是元素，acc+x是操作
+```
+
+
+
 ### enumerate
 
 创建迭代器，返回当前迭代次数以及下一个值的对 `(i, val)`，`i:usize` 是当前迭代索引，`val` 是值
@@ -839,6 +870,16 @@ let a = ['a', 'b', 'c'];
 let mut iter = a.iter().enumerate();
 assert_eq!(iter.next(), Some((0, &'a')));
 ```
+
+### map
+
+获取一个闭包并创建一个迭代器，该迭代器在每个元素上调用该闭包。由于 `map` 是惰性的，因此在已经使用其他迭代器时，最好使用 `map()`。
+
+```rust
+let new = old.iter().map(|x| x+1).collect(); // new里面是old每个元素+1
+```
+
+
 
 ### next
 
@@ -875,6 +916,17 @@ fn take(self, n:usize) -> Take<Self>
 ```
 
 创建一个迭代器，`take(n)` 返回包含前`n` 个元素的迭代器，如果个数小于 `n` ，就返回所有元素
+
+### zip
+
+将参数转换为迭代器，将两个迭代器的元素配对，组成一个元组，最终返回一个迭代器，支持嵌套链接使用
+
+```rust
+A.iter().zip(B.iter().zip(C.iter()))
+// 会返回迭代器，指向的元素为(a,(b,c))
+```
+
+
 
 
 
