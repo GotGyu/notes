@@ -291,7 +291,7 @@ UTF-8编码的可增长字符串，取引用则转换为 `&str`
 
 将 `String` 转换为字节切片，不会进行内存的重新分配，只是返回对原始数据的借用，因此字节切片的生命周期与原始 `String` 对象绑定，没有转移所有权
 
-适用场景：只需要字节的不可变引用，且不需要修改原始 `String` 时，选择 `as_bytes` 更高效（不用内存分配）
+适用场景：只需要字节的不可变引用，且**不需要修改原始 `String` 时**，选择 `as_bytes` 更高效（不用内存分配）
 
 ```rust
 let s = String::from("hello");  // s为&[104, 101, 108, 108, 111]
@@ -331,11 +331,20 @@ if let Some(x) = s.find(|&c| c==val);
 let hello = String::from("Hello, world!"); // hello是String类型
 ```
 
+### from_utf8
+
+从 `&[u8]` 切片转换成一个 `String`
+
+```rust
+// 有一个&[u8]切片temp，要返回String
+return String::from_utf8(temp),unwrap();
+```
+
 ### into_bytes
 
 将 `String` 转换为字节vector，会消耗 `String`，并将数据转换为一个新的 `Vec`，所以调用 `into_bytes` 后，原 `String` 的所有权被转移，不能再使用原 `String` 对象
 
-适用场景：需要拥有字节数组的所有权，且不需要原始的 `String` 时
+适用场景：需要拥有字节数组的所有权，且不需要原始的 `String` 时，或者需要修改 `String` 时
 
 ```rust
 let s = String::from("hello");
@@ -353,7 +362,7 @@ s.push_str("bar");  // s:String=foobar
 
 ## 数组 array
 
-## 
+
 
 # 集合类型
 

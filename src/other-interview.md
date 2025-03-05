@@ -147,7 +147,17 @@
        - `main` 返回时，程序结束
        - 释放所有资源（如堆内存、文件句柄等）
 
-6. 
+6. **怎么判断数据分配在栈上还是分配在堆上?**
+
+   - Rust 的内存管理模型非常清晰，所以分配在哪里取决于数据的类型和创建方式
+   - 栈上分配的数据：
+     - 基本数据类型：如 `i32`, `f64`, `bool`等
+     - **固定大小**的复合类型：元组、数组、结构体等
+     - 函数内部局部变量
+   - 堆上分配的数据：
+     - **动态大小**的类型：如 `String`, `Vec<T>`, `Box<T>` 等
+     - 智能指针管理的数据：如 `Box<T>`, `Rc<T>`, `Arc<T>`等
+     -  
 
 ## 数据结构
 
@@ -241,53 +251,55 @@
    - **生命周期标记**：当需要表达一个类型与某个生命周期相关，但实际数据并不直接包含该生命周期时
    - **未使用的类型参数**：泛型类型中，如果某些类型参数未被直接使用，编译器可能会报错，用了这个类型就不会报错
 
-4. 
+4. **Rust 的常用 trait 有哪些？**
+
+   | Trait 名称           | 用途                                                         | 如何使用                                                     |
+   | -------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+   | `Copy`               | 允许按位复制类型的值                                         | 添加 `#[derive(Copy)]`                                       |
+   | `Clone`              | 允许显式复制类型的值                                         | 添加 `#[derive(Clone)]` 或手动实现 `clone` 方法              |
+   | `Eq`                 | 表示类型可以进行相等性比较                                   | 添加 `#[derive(Eq)]` 或手动实现 `eq` 方法                    |
+   | `PartialEq`          | 表示类型可以进行部分相等性比较                               | 添加 `#[derive(PartialEq)]` 或手动实现 `partial_eq` 方法     |
+   | `Ord`                | 表示类型可以进行全序比较                                     | 添加 `#[derive(Ord)]` 或手动实现 `cmp` 方法                  |
+   | `PartialOrd`         | 表示类型可以进行部分序比较                                   | 添加 `#[derive(PartialOrd)]` 或手动实现 `partial_cmp` 方法   |
+   | `Debug`              | 允许格式化输出调试信息                                       | 添加 `#[derive(Debug)]` 或手动实现 `fmt` 方法                |
+   | `Default`            | 允许为类型创建默认值                                         | 在类型定义上添加 `#[derive(Default)]` 或手动实现 `default` 方法 |
+   | `Hash`               | 允许将类型的值用作哈希表的键                                 | 在类型定义上添加 `#[derive(Hash)]` 或手动实现 `hash` 方法    |
+   | `Display`            | 允许格式化输出用户面向的信息                                 | 手动实现 `fmt` 方法                                          |
+   | `FromStr`            | 允许从字符串解析出类型的值                                   | 手动实现 `from_str` 方法                                     |
+   | `From`/`Into`        | 允许在不同类型之间转换值                                     | 手动实现 `from` 或者 `into` 方法                             |
+   | `AsRef`/`AsMut`      | 允许将值转换为引用或可变引用                                 | 手动实现 `as_ref` 或者 `as_mut` 方法                         |
+   | `Borrow`/`BorrowMut` | 允许将值借用为引用或可变引用，通常用于哈希表的键和集合元素的比较和查找 | 手动实现 `borrow` 或者 `borrow_mut` 方法                     |
+   | `Deref`/`DerefMut`   | 允许重载解引用运算符（*）以便自定义解引用行为。通常用于智能指针 | 手动实现 `deref` 或 `deref_mut` 方法                         |
+   | `Iterator`           | 表示一个迭代器，可以迭代产生一系列值，通常用于 for 循环和其他迭代操作。 | 手动实现 `next` 方法                                         |
+
+   
 
 5. - 
-   
-7. 
 
-12. 
+6. Trait Objct
 
-13. 
+7. 详细问了动态分发和静态分发及相关效率影响
 
-9. - 
+8. 解释一下Rust中`Deref` 、`Drop`、`Clone`、`Copy`、`Any` 这几个`trait`
+   - `Deref`是解引用语义，结合Rust中的自动解引用机制，可允许自定义包装类型如智能指针等变量像内部变量一样使用，但使用仅限于取`&self`，如果要取`&mut self`则需要`DerefMut`这个`trait`。
+   - `Drop`即[析构函数](https://zhida.zhihu.com/search?content_id=179681200&content_type=Article&match_order=1&q=析构函数&zhida_source=entity)。在变量生命周期结束时将自动执行`drop`以销毁。
+   - `Clone`是复制语义，可由用户实现，表示复制一个对象。任何可复制的类都可以实现这个`trait`。
+   - `Copy`也是复制语义，但与`Clone`不同的是，它只是一个标记，用来告诉编译器，该类型可以直接通过`memcpy`复制，而无需其他动作。`Copy`通常用于原生类型及其组合类型（[结构体](https://zhida.zhihu.com/search?content_id=179681200&content_type=Article&match_order=1&q=结构体&zhida_source=entity)、元组、枚举等）。
+   - `Any`提供了一种简单的动态[反射机制](https://zhida.zhihu.com/search?content_id=179681200&content_type=Article&match_order=1&q=反射机制&zhida_source=entity)，要求类型必须具有`'static`的生命周期。在运行时可以`downcast`到任意类型，但若实际类型与要转换的类型不一致时，将返回`Err`。
 
-17. 
+9. rust优势
+   - 内存安全，并发安全，无gc
 
-18. 
+10. 对Rust函数式编程的理解？C时函数式编程吗？
 
-20. 怎么判断数据分配在栈上还是分配在堆上?
+11. Rust常用的设计模式
 
-21. Rust的常用trait
-
-22. 锁有几种？说一下锁中毒
-    - 持有锁的时候发生panic好像就是锁中毒
-
-23. Trait Objct
-
-24. 详细问了动态分发和静态分发及相关效率影响
-
-25. 解释一下Rust中`Deref` 、`Drop`、`Clone`、`Copy`、`Any` 这几个`trait`
-    - `Deref`是解引用语义，结合Rust中的自动解引用机制，可允许自定义包装类型如智能指针等变量像内部变量一样使用，但使用仅限于取`&self`，如果要取`&mut self`则需要`DerefMut`这个`trait`。
-    - `Drop`即[析构函数](https://zhida.zhihu.com/search?content_id=179681200&content_type=Article&match_order=1&q=析构函数&zhida_source=entity)。在变量生命周期结束时将自动执行`drop`以销毁。
-    - `Clone`是复制语义，可由用户实现，表示复制一个对象。任何可复制的类都可以实现这个`trait`。
-    - `Copy`也是复制语义，但与`Clone`不同的是，它只是一个标记，用来告诉编译器，该类型可以直接通过`memcpy`复制，而无需其他动作。`Copy`通常用于原生类型及其组合类型（[结构体](https://zhida.zhihu.com/search?content_id=179681200&content_type=Article&match_order=1&q=结构体&zhida_source=entity)、元组、枚举等）。
-    - `Any`提供了一种简单的动态[反射机制](https://zhida.zhihu.com/search?content_id=179681200&content_type=Article&match_order=1&q=反射机制&zhida_source=entity)，要求类型必须具有`'static`的生命周期。在运行时可以`downcast`到任意类型，但若实际类型与要转换的类型不一致时，将返回`Err`。
-
-26. rust优势
-    - 内存安全，并发安全，无gc
-
-27. 对Rust函数式编程的理解？C时函数式编程吗？
-
-28. Rust常用的设计模式
-
-29. Rust使用迭代器的好处
+12. Rust使用迭代器的好处
     - 惰性
 
-30. Rust的所有权、RAII、借用、生命周期
+13. Rust的所有权、RAII、借用、生命周期
 
-31. hashmap 和 concurrenthashmap
+14. hashmap 和 concurrenthashmap
 
 ## 智能指针
 
@@ -316,7 +328,7 @@
 
    - trait设计不合理，在需要 `&self`的方法上要改变内部状态。使用 `RefCell` 要遵循借用的使用规则，不然会导致运行时Panic
 
-## 多线程
+## 多线程与并发
 
 1. **`Mutex<T>` 和 `RwLock<T>`** 
    - **对 T 的要求有什么区别？**
@@ -328,16 +340,37 @@
    - **`Mutex` 的使用场景？**
      - 最适合用在**数据写操作比较频繁的情况**。`Mutex` 通过互斥锁确保同一时刻只有一个线程能够访问数据，适用于对数据进行单线程化访问的场景。
      - 理想使用场景：需要频繁修改数据，需要排他锁来保证数据一致性（比如状态更新、批量处理、缓存写入等场景）
-2. 用的哪个运行时，Tokio 还是 Async-std？
-3. Rust中的多线程thread编程和Async异步编程
-4. 关于 `async`
+
+2. **锁有几种？说一下锁中毒**
+
+   - Rust 中常见的锁类型：
+     - `Mutex<T>` 互斥锁
+     - `RwLock<T>` 读写锁
+     - `Condvar` 条件变量
+     - `Once` 一次性初始化锁
+     - `Barrier` 屏障
+
+   - 锁中毒：
+     - 定义：当线程在持有锁（如 `Mutex` 或 `RwLock`）时发生 panic，锁会进入“中毒”状态，中毒的锁会记录 panic 信息，其他线程在尝试获取锁时会收到 `PoisonError`
+     - 必要性：锁中毒是一种保护机制，用于防止数据处于不一致状态。如果线程在持有锁时 panic，可能会导致共享数据被破坏，锁中毒提醒其他线程数据可能已损坏
+     - 处理方案：恢复数据并继续使用锁/丢弃锁并重新初始化数据
+
+3. 用的哪个运行时，Tokio 还是 Async-std？
+
+4. Rust中的多线程thread编程和Async异步编程
+
+5. 关于 `async`
    - 说一下 `async` 和 `Future`
    - 什么是`async` 的优雅关闭？
-5. 
-6. 讲一下 `Send` 和 `Sync`
+
+6. 
+
+7. 讲一下 `Send` 和 `Sync`
    - 多线程的时候需要加上，编译器会自己推断一个结构是否 `Send`, 是否 `Sync`
-7. 
-8. 多线程好处很多,那Nginx为什么使用多进程而不是多线程?
+
+8. 
+
+9. 多线程好处很多,那Nginx为什么使用多进程而不是多线程?
 
 ## 宏
 
