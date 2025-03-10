@@ -741,6 +741,30 @@ let m = Mutex::new(5);
 }
 ```
 
+## OnceLock
+
+一个线程安全的**单次写入锁**，确保了在多线程环境中，某个值只会被写入一次，通常用于**惰性初始化**全局状态或配置，因为它的 `set` 方法只能被调用一次，并且一旦设置成功，就不能再修改
+
+```rust
+use std::sync::OnceLock;
+```
+
+### get
+
+获取值，如果值已经被设置，则返回 `Some(&T)`，否则返回 `None`
+
+```rust
+if let Some(value) = ONCE.get() {...}
+```
+
+### set
+
+设置值，如果值已经被设置，则返回 `Err`，否则返回 `Ok`
+
+```rust
+static ONCE: OnceLock<String> = OnceLock::new();
+ONCE.set("Hello, world!".to_string()).unwrap();
+```
 
 
 # 其他类型
