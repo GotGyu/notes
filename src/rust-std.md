@@ -855,9 +855,19 @@ let s = x.to_string();
 
 ## 迭代器 Iterator
 
+### chain
+
+接受两个迭代器，并依次创建一个新的迭代器，首先迭代第一个迭代器的值，然后迭代第二个迭代器的值
+
+```rust
+let a1 = [1,2,3];
+let a2 = [4,5,6];
+let mut iter = a1.iter().chain(a2.iter()); //最后iter返回1,2,3,4,5,6
+```
+
 ### collect
 
-将迭代器转换为集合，可以将任何可迭代的东西变成一个相关的集合，可以用 `collect::<>` 指定集合类型，比如 `iter.collect::<Vec<_>>` 即转换为 `Vec` 类型
+将迭代器转换为集合，可以将任何可迭代的东西变成一个相关的集合，可以用 `collect::<>` 指定集合类型，比如 `iter.collect::<Vec<_>>` 即转换为 `Vec` 类型，也可以根据上下文自动推断目标类型
 
 ```rust
 // 基本用法
@@ -877,6 +887,25 @@ let a = [1, 2, 3];
 assert_eq!(a.iter().count(), 3);
 ```
 
+### cycle
+
+不断重复的迭代器，不会在 `None` 处停止，而是会从头开始重新启动
+
+```rust
+let a = [1,2,3];
+let mut it = a.iter().cycle();  // it会重复：1，2，3，1，2，3...
+```
+
+### enumerate
+
+创建迭代器，返回当前迭代次数以及下一个值的对 `(i, val)`，`i:usize` 是当前迭代索引，`val` 是值
+
+```rust
+let a = ['a', 'b', 'c'];
+let mut iter = a.iter().enumerate();
+assert_eq!(iter.next(), Some((0, &'a')));
+```
+
 ### fold
 
 需要两个参数：
@@ -892,17 +921,15 @@ let sum = a.iter().fold(0, |acc, x| acc+x);  //sum=6
 // 0是初始值，|acc,x|是闭包，acc是迭代器，x是元素，acc+x是操作
 ```
 
+### for_each
 
-
-### enumerate
-
-创建迭代器，返回当前迭代次数以及下一个值的对 `(i, val)`，`i:usize` 是当前迭代索引，`val` 是值
+在迭代器的每个元素上调用一个闭包，等效于在迭代器上使用 `for` 循环，但不能使用 `break` 和 `continue`，在某些情况下可能更快，比如链式调用时。
 
 ```rust
-let a = ['a', 'b', 'c'];
-let mut iter = a.iter().enumerate();
-assert_eq!(iter.next(), Some((0, &'a')));
+iter.zip(s.chars()).for_each(|(i,c)| rows[i].push(c));
 ```
+
+
 
 ### map
 
