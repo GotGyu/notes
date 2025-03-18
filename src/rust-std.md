@@ -191,7 +191,9 @@ pub struct Pin<P> {
 }
 ```
 
-包装一个指针，并且能确保该指针指向的数据不会被移动，除非它实现 `Unpin`
+包装一个指针，并且能确保**该指针指向的数据不会被移动**，防止移动可能导致的引用失效问题，除非它实现 `Unpin`
+
+在 Rust 里，大多数值默认可以移动，但某些任务（特别是涉及**异步任务和自引用结构体**）不能随意移动，否则可能会导致**指针失效**或**未定义行为**
 
 ## 切片 slice
 
@@ -799,10 +801,6 @@ map.entry("poneyland").and_modify(|e| {*e+=1}).or_insert(42);//map中存储(pone
 map.entry("poneyland").or_insert(10); //map中存储(poneyland, 10)
 ```
 
-## PhantomData
-
-一个标记类型，用于在类型系统中表示某种“假想”的数据关系，**实际上并不占用任何内存空间**。
-
 ## 类型别名 type
 
 类型别名不是一个独立的全新的类型，而是某一个类型的别名，使用它只是为了让可读性更好，比如：
@@ -812,6 +810,39 @@ type Meters = u32;
 ```
 
 则编译器会把 `Meters` 当作 `u32` 来使用
+
+# 其他模块
+
+## marker
+
+### PhantomData
+
+一个标记类型，用于在类型系统中表示某种“假想”的数据关系，**实际上并不占用任何内存空间**。在运行时，`PhantomData<T>` 等同于 `()`，体现零成本抽象；在编译期，`PhantomData<T>` 等同于 `T`
+
+### Unpin
+
+一个 trait，表示该类型可以安全地移动，默认情况下大多数类型都是 `Unpin`，只有那些**涉及指针、自引用或 Future/异步流**的类型，才可能是 `!Unpin`
+
+
+
+
+
+## net
+
+### SocketAddr
+
+```rust
+pub enum SocketAddr {
+    V4(SocketAddrV4),
+    V6(SocketAddrV6),
+}
+```
+
+Internet 套接字地址，包含一个 IPv4 或 IPv6 的地址、一个 16 位端口号以及一些可能与版本有关的附加信息
+
+## time
+
+### Duration
 
 # Trait
 
