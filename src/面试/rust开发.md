@@ -678,7 +678,270 @@
      - 通知任务退出：通过通道（channel）或取消标志（`CancellationToken`）通知所有异步任务退出
      - 等待任务完成：使用 `JoinHandle` 或类似机制等待所有任务完成
 
-10. 讲一下 `Send` 和 `Sync`
+10. **深度解析 `async/await` 和 `Future`**
+
+   - **`Future` 的本质：状态机协议**
+
+     ```rust
+     // Future trait的精确定义
+     pub trait Future {
+         type Output;
+         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>;
+     }
+     
+     pub enum Poll<T> {
+         Ready(T),
+         Pending,
+     }
+     ```
+
+     - 每个`Future`都是一个状态机，通过`poll`方法推进执行
+     - `Pin`保证内存位置稳定，使自引用结构安全
+     - `Context`提供`Waker`用于唤醒机制
+
+     ```rust
+     // 手工实现 Future 示例
+     struct Delay {
+         duration: Duration,
+         started: Option<Instant>,
+     }
+     
+     impl Future for Delay {
+         type Output = ();
+         
+         fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+             match self.started {
+                 Some(start) => {
+                     if start.elapsed() >= self.duration {
+                         Poll::Ready(())
+                     } else {
+                         cx.waker().wake_by_ref(); // 主动要求重新调度
+                         Poll::Pending
+                     }
+                 }
+                 None => {
+                     self.started = Some(Instant::now());
+                     cx.waker().wake_by_ref();
+                     Poll::Pending
+                 }
+             }
+         }
+     }
+     ```
+
+     - 这个 `Delay` `Future` 展示了：
+       - 状态转换（未开始->进行中->完成）
+       - 唤醒机制的使用
+       - 手动推进状态机
+
+   - **`async/await` 的脱糖过程**
+
+     原始代码：
+
+     ```rust
+     async fn fetch_data() -> Result<String, Error> {
+         let url = "https://api.example.com/data";
+         let resp = reqwest::get(url).await?;
+         resp.text().await
+     }
+     ```
+
+     脱糖后等价代码：
+
+     ```rust
+     fn fetch_data() -> impl Future<Output = Result<String, Error>> {
+         async move {
+             let url = "https://api.example.com/data";
+             let resp = match Future::poll(reqwest::get(url)) {
+                 Poll::Ready(r) => r,
+                 Poll::Pending => return Poll::Pending,
+             }?;
+             match Future::poll(resp.text()) {
+                 Poll::Ready(t) => Poll::Ready(Ok(t)),
+                 Poll::Pending => Poll::Pending,
+             }
+         }
+     }
+     ```
+
+     编译器会将 `async` 块转换为一个实现 `Future` 的结构体：
+
+     ```rust
+     struct FetchDataFuture {
+         // 分为多个状态
+         state: FetchDataState,
+         url: String,
+     }
+     
+     enum FetchDataState {
+         Start,
+         AwaitingGet(ReqwestFuture),
+         AwaitingText(TextFuture),
+         Done,
+     }
+     
+     impl Future for FetchDataFuture {
+         type Output = Result<String, Error>;
+         
+         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+             let this = unsafe { self.get_unchecked_mut() };
+             loop {
+                 match this.state {
+                     Start => {
+                         let fut = reqwest::get(&this.url);
+                         this.state = AwaitingGet(fut);
+                     }
+                     AwaitingGet(ref mut fut) => {
+                         match Pin::new(fut).poll(cx)? {
+                             Poll::Ready(resp) => {
+                                 let text_fut = resp.text();
+                                 this.state = AwaitingText(text_fut);
+                             }
+                             Poll::Pending => return Poll::Pending,
+                         }
+                     }
+                     AwaitingText(ref mut fut) => {
+                         match Pin::new(fut).poll(cx)? {
+                             Poll::Ready(text) => {
+                                 this.state = Done;
+                                 return Poll::Ready(Ok(text));
+                             }
+                             Poll::Pending => return Poll::Pending,
+                         }
+                     }
+                     Done => panic!("polled after completion"),
+                 }
+             }
+         }
+     }
+     ```
+
+   - **执行器executor的工作原理**
+
+     tokio调度器核心逻辑
+
+     ```rust
+     // 简化的调度循环
+     fn run(&self) {
+         while let Some(task) = self.find_runnable_task() {
+             let task = unsafe { self.unpark_task(task) };
+             
+             // 执行任务直到阻塞
+             let poll_result = task.poll();
+             
+             match poll_result {
+                 Poll::Ready(_) => self.complete_task(task),
+                 Poll::Pending => self.park_task(task),
+             }
+         }
+     }
+     ```
+
+     waker的唤醒机制
+
+     ```rust
+     struct TaskWaker {
+         task: Arc<Task>,
+     }
+     
+     impl Wake for TaskWaker {
+         fn wake(self: Arc<Self>) {
+             EXECUTOR.enqueue(self.task.clone());
+         }
+     }
+     
+     // 在Future::poll中使用的典型模式
+     cx.waker().wake_by_ref(); // 将任务重新加入队列
+     ```
+
+   - **性能优化关键点**
+
+     - **无虚拟调用**：编译器静态分发所有Future调用
+     - **无内存分配**：小Future可完全栈分配
+     - **无动态派发**：await点状态转换编译为直接跳转
+     - 综上三点做到零成本抽象
+
+   - **与其它语言的对比**
+
+     | 特性     | Rust             | JavaScript | C++20        |
+     | :------- | :--------------- | :--------- | :----------- |
+     | 实现机制 | 零成本状态机     | 微任务队列 | 协程帧       |
+     | 内存安全 | 通过Pin保证      | GC管理     | 手动管理     |
+     | 调度控制 | 完全可控         | 引擎控制   | 部分可控     |
+     | 取消支持 | 通过Drop         | 无内置机制 | 复杂异常处理 |
+     | 调试难度 | 高（状态机复杂） | 中等       | 极高         |
+
+11. **`async/await` 是不是语法糖？**
+
+    是，但其实现不止表面上的语法简化。它作为语法糖，确实会被编译器转换为基于 `Future` 的状态机代码，开发者能够少些很多代码，且避免了回调地狱。
+
+    而它同时还有超越语法糖的本质创新，因为它实现了真正的**零成本抽象**：
+
+    - **无运行时开销**：不依赖垃圾回收或虚拟机
+    - **无动态分配**：小 `Future` 可完全栈分配
+    - **无类型擦除**：编译器静态知晓所有类型
+
+    还有**和语言系统的深度集成**：
+
+    - **生命周期系统**：正确处理跨 `await` 点的引用
+    - **所有权系统**：确保资源安全释放
+    - **Pin系统**：安全处理自引用结构
+
+    还有**执行模型的创新**：
+
+    - **协作式调度**：精确控制挂起点
+    - **唤醒机制**：通过`Waker`实现高效通知
+    - **取消语义**：通过`Drop`自动清理资源
+
+12. **为什么 `async/await` 需要 `Pin`**
+
+    - 异步函数中涉及自引用
+
+      ```rust
+      async fn self_referential() {
+          let array = [1, 2, 3];
+          let element = &array[1]; // 创建对局部变量的引用
+          some_await.await;        // 挂起点！
+          println!("{}", element); // 之后继续使用引用
+      }
+      ```
+
+    - 经过状态机转换后，上述代码可能会变成如下的样子：
+
+      ```rust
+      struct SelfRefFuture {
+          array: [i32; 3],
+          element: *const i32, // 指向array[1]的原始指针
+          state: State,
+      }
+      // 这里element指针必须始终指向array[1]，如果这个结构体被移动，指针就会悬垂！
+      ```
+
+    - `Pin` 确保：一旦数据被 `Pin`，它的内存地址将永远不会改变，这通过类型系统静态保证
+
+    - `Future` trait要求：
+
+      ```rust
+      pub trait Future {
+          type Output;
+          fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>;
+      }
+      ```
+
+      关键：
+
+      - `self`参数是`Pin<&mut Self>`而非普通的`&mut Self`
+      - 这强制要求所有 `Future` 实现必须考虑固定语义
+
+    - 为什么需要 `Pin` 的 `poll` 方法：
+
+      | 场景           | 无Pin的风险          | Pin的保障                |
+      | :------------- | :------------------- | :----------------------- |
+      | 跨await点引用  | 移动后引用失效       | 确保引用目标不被移动     |
+      | 自引用Future   | 自指针变为悬垂指针   | 固定内存位置保证指针有效 |
+      | 唤醒后继续执行 | 状态机可能被非法移动 | 执行期间状态机位置不变   |
+
+13. 讲一下 `Send` 和 `Sync`
    - 两个trait，用于保证多线程并发编程的安全性，主要作用是定义类型在多线程环境中的行为约束
    - 多线程编程的时候需要加上，编译器会自己推断一个结构是否 `Send`，是否 `Sync`
    - `Send`：
