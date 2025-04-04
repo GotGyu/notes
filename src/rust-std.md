@@ -264,7 +264,7 @@ let s = "Hello, World"; //此处s的类型是&str
 
 ### bytes
 
-返回字符串切片的**字节**上的迭代器，用来通过字节遍历字符串切片
+返回字符串切片的**底层字节数组**上的迭代器，用来通过字节遍历字符串切片
 
 ```rust
 // 计算一个str中字符的ascii码之和
@@ -273,13 +273,28 @@ for i in s.bytes() {
 }
 ```
 
+```rust
+for b in "中国人".bytes() {
+    println!("{}", b);
+}
+// 输出如下：
+// 228
+// 184
+// ...
+```
+
 ### chars
 
-返回字符串切片的 `char` 上的迭代器，用来通过 `char` 遍历字符串切片，每次调用都会返回下一个未被遍历的**字符**
+返回字符串切片的 `char` 上的迭代器，用来通过 `char` 遍历字符串切片，每次调用都会返回下一个未被遍历的**Unicode 字符**
 
 ```rust
-// 使用 enumerate 获取字符与其位置
-for (i,val) in str.chars().enumerate() {...} // i为索引下标，val为对应位置值
+for c in "中国人".chars() {
+    println!("{}", c);
+}
+//输出如下：
+//中
+//国
+//人
 ```
 
 ### split_whitespace
