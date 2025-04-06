@@ -1472,14 +1472,57 @@ Rust 的异步编程实现的很好：
   - 无所谓时，统一选多线程
   - 也可以根据情况两者一起使用
 
-#### 说一下 `async` 和 `Future`
+#### `async/.await` 简单用法
 
-- `async` 是关键字，用于定义异步函数或块，能将同步代码转换为异步代码，生成一个 `Future`
-- `Future` 是一个 trait，表示一个异步计算，它可能已经完成（`Poll::Ready`）或仍在进行中（`Poll::Pending`）
+使用 `async/.await` 可以让我们用同步的方式去编写异步的代码，**通过 `async` 标记的语法块会被转换成实现了`Future`特征的状态机。**与同步调用阻塞当前线程不同，当`Future`执行并遇到阻塞时，它会让出当前线程的控制权，这样其它的`Future`就可以在该线程中运行，这种方式完全不会导致当前线程的阻塞。
+
+```rust
+use futures::executor::block_on;
+
+async fn hello_world() {
+    hello_cat().await;
+    println!("hello, world!");
+}
+
+async fn hello_cat() {
+    println!("hello, kitty!");
+}
+fn main() {
+    let future = hello_world();
+    block_on(future);
+}
+```
+
+上面代码中，`block_on` 是一个执行器，它会阻塞当前线程直到指定的 `Future` 完成。在`async fn`函数中使用`.await`可以等待另一个异步调用的完成，`.await` 不会阻塞当前线程，而是异步等待 `Future A` 的完成，在等待过程中，线程还可以继续执行其它的 `Future B`，实现并发处理的效果。
+
+上面的代码并没有实现并发，只是用 `block_on` 顺序地推进主 `Future` 状态机，要实现并发可以这么写，需要使用 `join!` 或 `spawn` 等并发调度机制：
+
+```rust
+use futures::join;
+use futures::executor::block_on;
+
+async fn hello_cat() {
+    println!("hello, kitty!");
+}
+
+async fn hello_dog() {
+    println!("hello, doggy!");
+}
+
+async fn hello_world() {
+    let ((), ()) = join!(hello_cat(), hello_dog());
+    println!("hello, world!");
+}
+
+fn main() {
+    block_on(hello_world());
+}
+
+```
 
 #### `async/await` 是不是语法糖？
 
-是，但其实现不止表面上的语法简化。它作为语法糖，确实会被编译器转换为基于 `Future` 的状态机代码，开发者能够少些很多代码，且避免了回调地狱。
+是，本质上是编译器帮助构造一个 `Future` 状态机，开发者能够少写很多代码，但它的实现不止表面上的语法简化
 
 而它同时还有超越语法糖的本质创新，因为它实现了真正的**零成本抽象**：
 
@@ -1506,6 +1549,123 @@ Rust 的异步编程实现的很好：
   - 监听关闭信号：使用 `tokio::signal` 或 `async-std::signal` 监听系统信号（如 `SIGINT` 或 `SIGTERM`）
   - 通知任务退出：通过通道（channel）或取消标志（`CancellationToken`）通知所有异步任务退出
   - 等待任务完成：使用 `JoinHandle` 或类似机制等待所有任务完成
+
+#### `async` 的生命周期
+
+`async fn` 函数如果拥有引用类型的参数，那它返回的 `Future` 的生命周期就会被这些参数的生命周期所限制，**参数必须比 `Future` 活得更久**。在一般情况下，在函数调用后就立即 `.await` 不会存在任何问题，但若 `Future` 被先存起来或发送到另一个任务或者线程，就可能存在问题了。
+
+其中一个常用的解决方法就是将具有引用参数的 `async fn` 函数转变成一个具有 `'static` 生命周期的 `Future`（没看懂）
+
+#### `async move`
+
+`async` 允许我们使用 `move` 关键字来将环境中变量的所有权转移到语句块内，就像闭包那样，**好处**是你不再发愁该如何解决借用生命周期的问题，**坏处**就是无法跟其它代码实现对变量的共享
+
+#### 多线程执行器下的注意事项
+
+1. `Future` 可能会在线程间被移动，因此 `async` 语句块中的变量必须要能在线程间传递。 至于 `Future` 会在线程间移动的原因是：它内部的任何`.await`都可能导致它被切换到一个新线程上去执行。由于需要在多线程环境使用，意味着 `Rc`、 `RefCell` 、没有实现 `Send` 的所有权类型、没有实现 `Sync` 的引用类型，它们都是不安全的，因此无法被使用
+2. 在 `.await` 时使用普通的锁不安全，例如 `Mutex` 。原因是，它可能会导致线程池被锁：当一个任务获取锁 `A` 后，若它将线程的控制权还给执行器，然后执行器又调度运行另一个任务，该任务也去尝试获取了锁 `A` ，结果当前线程会直接卡死，最终陷入死锁中。因此，为了避免这种情况的发生，需要使用 `futures` 包下的锁 `futures::lock` 来替代 `Mutex` 完成任务
+
+### `Future` 与任务调度
+
+#### 简单介绍 `Future`
+
+`Future` trait 是 Rust 异步编程的核心，因为异步函数是异步编程的核心，而 `Future` 是异步函数的返回值和被执行的关键
+
+`Future` trait 的定义用一句话就是：是一个能产出值的异步计算(虽然该值可能为空，例如 `()` )。将其源码简化就是：
+
+```rust
+trait SimpleFuture {
+    type Output;
+    fn poll(&mut self, wake: fn()) -> Poll<Self::Output>;
+}
+
+enum Poll<T> {
+    Ready(T),
+    Pending,
+}
+```
+
+`Future` 需要被**执行器 `poll` (轮询)**后才能运行，通过调用该方法，可以推进 `Future` 的进一步执行，直到被切走为止（因为 `Future` 并不能保证在一次 `poll` 中就被执行完）。若在当前 `poll` 中， `Future` 可以被完成，则会返回 `Poll::Ready(result)` ，反之则返回 `Poll::Pending`， 并且安排一个 **`wake` 函数**：当未来 `Future` 准备好进一步执行时， 该函数会被调用，然后管理该 `Future` 的执行器(例如 `block_on`)会再次调用 `poll` 方法，此时 `Future` 就可以继续执行了。如果没有 `wake` 方法，那执行器无法知道某个 `Future` 是否可以继续被执行，除非执行器定期的轮询每一个 `Future`，确认它是否能被执行，但这种作法效率较低。而有了 `wake`，`Future` 就可以主动通知执行器，然后执行器就可以精确的执行该 `Future`。 这种“**事件通知 -> 执行**”的方式要远比定期对所有 `Future` 进行一次全遍历来的高效
+
+这种 `Future` 模型允许将**多个异步操作**组合在一起，同时还**无需任何内存分配**。不仅仅如此，如果你需要同时运行多个 `Future`或链式调用多个 `Future` ，也可以通过无内存分配的状态机实现，例如：
+
+```rust
+trait SimpleFuture {
+    type Output;
+    fn poll(&mut self, wake: fn()) -> Poll<Self::Output>;
+}
+enum Poll<T> {
+    Ready(T),
+    Pending,
+}
+
+/// 一个SimpleFuture，它会并发地运行两个Future直到它们完成
+/// 之所以可以并发，是因为两个Future的轮询可以交替进行，一个阻塞，另一个就可以立刻执行，反之亦然
+pub struct Join<FutureA, FutureB> {
+    // 结构体的每个字段都包含一个Future，可以运行直到完成.
+    // 等到Future完成后，字段会被设置为 `None`. 这样Future完成后，就不会再被轮询
+    a: Option<FutureA>,
+    b: Option<FutureB>,
+}
+
+impl<FutureA, FutureB> SimpleFuture for Join<FutureA, FutureB>
+where
+    FutureA: SimpleFuture<Output = ()>,
+    FutureB: SimpleFuture<Output = ()>,
+{
+    type Output = ();
+    fn poll(&mut self, wake: fn()) -> Poll<Self::Output> {
+        // 尝试去完成一个 Future `a`
+        if let Some(a) = &mut self.a {
+            if let Poll::Ready(()) = a.poll(wake) {
+                self.a.take();
+            }
+        }
+        // 尝试去完成一个 Future `b`
+        if let Some(b) = &mut self.b {
+            if let Poll::Ready(()) = b.poll(wake) {
+                self.b.take();
+            }
+        }
+        if self.a.is_none() && self.b.is_none() {
+            // 两个 Future都已完成 - 我们可以成功地返回了
+            Poll::Ready(())
+        } else {
+            // 至少还有一个 Future 没有完成任务，因此返回 `Poll::Pending`.
+            // 当该 Future 再次准备好时，通过调用`wake()`函数来继续执行
+            Poll::Pending
+        }
+    }
+}
+```
+
+**真实的 `Future` trait**：
+
+```rust
+trait Future {
+    type Output;
+    fn poll(
+        // 首先值得注意的地方是，`self`的类型从`&mut self`变成了`Pin<&mut Self>`:
+        self: Pin<&mut Self>,
+        // 其次将`wake: fn()` 修改为 `cx: &mut Context<'_>`，以为wake函数可以携带数据了
+        cx: &mut Context<'_>,
+    ) -> Poll<Self::Output>;
+}
+```
+
+#### `Waker` 唤醒任务
+
+`Waker` 提供了一个 `wake()` 方法，用于告诉执行器：相关的任务可以被唤醒了，此时执行器就可以对相应的 `Future` 再次进行 `poll` 操作
+
+#### executor 执行器
+
+`Future` 是惰性的，需要驱动它才会动，其中一个推动它的方式就是在 `async` 函数中使用 `.await` 来调用另一个 `async` 函数，但是这个只能解决 `async` 内部的问题，最外层的 `async` 函数则要**用执行器推动其运行**
+
+执行器会管理一批 `Future` (最外层的 `async` 函数)，然后通过不停地 `poll` 推动它们直到完成。 最开始，执行器会先 `poll` 一次 `Future` ，后面就不会主动去 `poll` 了，而是等待 `Future` 通过调用 `wake` 函数来通知它可以继续，它才会继续去 `poll` 。这种 **wake 通知然后 poll** 的方式会不断重复，直到 `Future` 完成
+
+#### 执行器和系统IO
+
+怎么样检查 `Future` 有没有完成？一个简单粗暴的方法就是开一个新线程不停的检查是否完成，如果是就调用 `wake()`，虽然该方法可行但是性能太低，需要为每个阻塞的 `Future` 都创建单独的线程。实际上，该问题往往是通过OS提供的**IO多路复用机制**来完成的，例如Linux中的 `epoll`，从而实现一个线程同时阻塞地去等待多个异步IO事件，一旦某个事件完成就立即退出阻塞并返回数据。利用它，**只需要一个执行器线程**，就会接收 IO 事件并将其分发到对应的 `Waker` 中，接着后者会唤醒相关的任务，最终通过执行器 `poll` 后，任务可以顺利地继续执行, 这种 IO 读取流程可以不停的循环，直到所有任务完成
 
 #### 为何 `async fn` 返回的 `Future` 默认不实现 `Send`？如何强制标记？
 
@@ -1547,264 +1707,81 @@ Rust 的异步编程实现的很好：
   }
   ```
 
-
-
-### `Future` 与任务调度
-
-#### 深度解析 `Future`
-
-   - **`Future` 的本质：状态机协议**
-
-     ```rust
-     // Future trait的精确定义
-     pub trait Future {
-         type Output;
-         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>;
-     }
-     
-     pub enum Poll<T> {
-         Ready(T),
-         Pending,
-     }
-     ```
-
-     - 每个`Future`都是一个状态机，通过`poll`方法推进执行
-     - `Pin`保证内存位置稳定，使自引用结构安全
-     - `Context`提供`Waker`用于唤醒机制
-
-     ```rust
-     // 手工实现 Future 示例
-     struct Delay {
-         duration: Duration,
-         started: Option<Instant>,
-     }
-     
-     impl Future for Delay {
-         type Output = ();
-         
-         fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-             match self.started {
-                 Some(start) => {
-                     if start.elapsed() >= self.duration {
-                         Poll::Ready(())
-                     } else {
-                         cx.waker().wake_by_ref(); // 主动要求重新调度
-                         Poll::Pending
-                     }
-                 }
-                 None => {
-                     self.started = Some(Instant::now());
-                     cx.waker().wake_by_ref();
-                     Poll::Pending
-                 }
-             }
-         }
-     }
-     ```
-
-     - 这个 `Delay` `Future` 展示了：
-       - 状态转换（未开始->进行中->完成）
-       - 唤醒机制的使用
-       - 手动推进状态机
-
-   - **`async/await` 的脱糖过程**
-
-     原始代码：
-
-     ```rust
-     async fn fetch_data() -> Result<String, Error> {
-         let url = "https://api.example.com/data";
-         let resp = reqwest::get(url).await?;
-         resp.text().await
-     }
-     ```
-
-     脱糖后等价代码：
-
-     ```rust
-     fn fetch_data() -> impl Future<Output = Result<String, Error>> {
-         async move {
-             let url = "https://api.example.com/data";
-             let resp = match Future::poll(reqwest::get(url)) {
-                 Poll::Ready(r) => r,
-                 Poll::Pending => return Poll::Pending,
-             }?;
-             match Future::poll(resp.text()) {
-                 Poll::Ready(t) => Poll::Ready(Ok(t)),
-                 Poll::Pending => Poll::Pending,
-             }
-         }
-     }
-     ```
-
-     编译器会将 `async` 块转换为一个实现 `Future` 的结构体：
-
-     ```rust
-     struct FetchDataFuture {
-         // 分为多个状态
-         state: FetchDataState,
-         url: String,
-     }
-     
-     enum FetchDataState {
-         Start,
-         AwaitingGet(ReqwestFuture),
-         AwaitingText(TextFuture),
-         Done,
-     }
-     
-     impl Future for FetchDataFuture {
-         type Output = Result<String, Error>;
-         
-         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-             let this = unsafe { self.get_unchecked_mut() };
-             loop {
-                 match this.state {
-                     Start => {
-                         let fut = reqwest::get(&this.url);
-                         this.state = AwaitingGet(fut);
-                     }
-                     AwaitingGet(ref mut fut) => {
-                         match Pin::new(fut).poll(cx)? {
-                             Poll::Ready(resp) => {
-                                 let text_fut = resp.text();
-                                 this.state = AwaitingText(text_fut);
-                             }
-                             Poll::Pending => return Poll::Pending,
-                         }
-                     }
-                     AwaitingText(ref mut fut) => {
-                         match Pin::new(fut).poll(cx)? {
-                             Poll::Ready(text) => {
-                                 this.state = Done;
-                                 return Poll::Ready(Ok(text));
-                             }
-                             Poll::Pending => return Poll::Pending,
-                         }
-                     }
-                     Done => panic!("polled after completion"),
-                 }
-             }
-         }
-     }
-     ```
-
-   - **执行器executor的工作原理**
-
-     tokio调度器核心逻辑
-
-     ```rust
-     // 简化的调度循环
-     fn run(&self) {
-         while let Some(task) = self.find_runnable_task() {
-             let task = unsafe { self.unpark_task(task) };
-             
-             // 执行任务直到阻塞
-             let poll_result = task.poll();
-             
-             match poll_result {
-                 Poll::Ready(_) => self.complete_task(task),
-                 Poll::Pending => self.park_task(task),
-             }
-         }
-     }
-     ```
-
-     waker的唤醒机制
-
-     ```rust
-     struct TaskWaker {
-         task: Arc<Task>,
-     }
-     
-     impl Wake for TaskWaker {
-         fn wake(self: Arc<Self>) {
-             EXECUTOR.enqueue(self.task.clone());
-         }
-     }
-     
-     // 在Future::poll中使用的典型模式
-     cx.waker().wake_by_ref(); // 将任务重新加入队列
-     ```
-
-   - **性能优化关键点**
-
-     - **无虚拟调用**：编译器静态分发所有Future调用
-     - **无内存分配**：小Future可完全栈分配
-     - **无动态派发**：await点状态转换编译为直接跳转
-     - 综上三点做到零成本抽象
-
-   - **与其它语言的对比**
-
-     | 特性     | Rust             | JavaScript | C++20        |
-     | :------- | :--------------- | :--------- | :----------- |
-     | 实现机制 | 零成本状态机     | 微任务队列 | 协程帧       |
-     | 内存安全 | 通过Pin保证      | GC管理     | 手动管理     |
-     | 调度控制 | 完全可控         | 引擎控制   | 部分可控     |
-     | 取消支持 | 通过Drop         | 无内置机制 | 复杂异常处理 |
-     | 调试难度 | 高（状态机复杂） | 中等       | 极高         |
-
 ### `Pin` 和 `Unpin` 
 
-**关于 `Pin<T>`**
+#### 关于 `Pin<T>`
 
 - **作用是什么？**
-  - 一个包装类型，防止某个数据的内存位置移动
+  - 一个**结构体**，防止某个数据的内存位置移动
   - 在接口上体现为不让用户拿到 `&mut T`，确保指向数据的指针不能随意改变
+  - 可以将值固定到栈上，也可以固定到堆上
 - **为什么需要它？**
+  - 核心目的：**允许安全地创建拥有自引用字段的结构体或 `future`**
   - 通常用于与异步编程和 `Future` 相关的场景
   - 因为异步任务会在运行时暂停和恢复，如果数据在这种暂停恢复过程中被移动了，可能会导致不可预期的行为，具体来说：
   - `Future` 的方法签名是 `Pin<&mut self>`，而 `Future` 本质上是一个通过状态机实现的无状态 generator，即运行时并不会为每个 generator 维护上下文的状态，这些状态都是通过编译器变成 `Future` 里的数据，而 `Future` 有可能会被传递、移动，`Future` 里面的数据存在自引用的情况，那么 `Future` 被移动的话，这些自引用的指针就会变成野指针，从而导致异常
 
+#### 关于 `Unpin`
+
+- 一个标记特征，表明一个类型可以随意被移动，可以被 `Pin` 住的值实现的特征是 `!Unpin`
+- 如果类型实现了 `Unpin` 特征，就不能再 `Pin` 了（可以，但是无用）
+- 绝大多数情况都是自动实现, 无需我们的操心
+
 #### **为什么 `async/await` 需要 `Pin`**
 
-- 异步函数中涉及自引用
+**一句话总结**：因为异步状态机 `Future` 会捕获局部变量并可能引用自己。如果这些引用指向的是状态机自身的字段，而状态机又可能被移动，那引用就会悬空。为了解决这一“自引用 + 移动”冲突，要用 `Pin` 把 `Future` 固定在内存中，确保这些引用始终有效
 
-  ```rust
-  async fn self_referential() {
-      let array = [1, 2, 3];
-      let element = &array[1]; // 创建对局部变量的引用
-      some_await.await;        // 挂起点！
-      println!("{}", element); // 之后继续使用引用
-  }
-  ```
+`Future` trait 的 `poll` 方法的签名中有一个 `self: Pin<&mut Self>`，`async` 的底层会创建一个实现了 `Future` 的匿名类型，并提供一个 `poll` 方法，当  `poll` 第一次被调用时，它会去查询任务状态，若任务无法完成，则 `poll` 方法会返回，未来对 `poll` 的调用将从上一次调用结束的地方开始。该过程会一直持续，直到 `Future` 完成为止。然而，如果 `async` 语句块中**使用了引用类型**，比如：
 
-- 经过状态机转换后，上述代码可能会变成如下的样子：
+```rust
+async {
+    let mut x = [0; 128];
+    let read_into_buf_fut = read_into_buf(&mut x);
+    read_into_buf_fut.await;
+    println!("{:?}", x);
+}
+```
 
-  ```rust
-  struct SelfRefFuture {
-      array: [i32; 3],
-      element: *const i32, // 指向array[1]的原始指针
-      state: State,
-  }
-  // 这里element指针必须始终指向array[1]，如果这个结构体被移动，指针就会悬垂！
-  ```
+这段代码会被编译成：
 
-- `Pin` 确保：一旦数据被 `Pin`，它的内存地址将永远不会改变，这通过类型系统静态保证
+```rust
+struct ReadIntoBuf<'a> {
+    buf: &'a mut [u8], // 指向下面的`x`字段
+}
 
-- `Future` trait要求：
+struct AsyncFuture {
+    x: [u8; 128],
+    read_into_buf_fut: ReadIntoBuf<'what_lifetime?>,  // 内部保存了一个&mmut x，导致构造自引用结构体
+}
+```
 
-  ```rust
-  pub trait Future {
-      type Output;
-      fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>;
-  }
-  ```
+这里，`ReadIntoBuf` 拥有一个引用字段，指向了结构体的另一个字段 `x` ，一旦 `AsyncFuture` 被移动，那 `x` 的地址也将随之变化，而对 `x` 的引用却不会变，导致出现未定义行为，也就是 `read_into_buf_fut.buf` 会变为不合法的。若能将 `Future` 在内存中固定到一个位置，就可以避免这种问题的发生，也就可以安全的创建上面这种引用类型。
 
-  关键：
+当编写 `async` 的时候，**Rust编译器会自动**：
 
-  - `self`参数是`Pin<&mut Self>`而非普通的`&mut Self`
-  - 这强制要求所有 `Future` 实现必须考虑固定语义
+- 分析 `async` 块中是否存在 **引用局部变量的 `future`**
+- 如果存在，它会要求这个 `future` 必须是 **`!Unpin`** 的
+- 如果你尝试把它 `.await` 前移动，Rust 会拒绝编译，除非你明确地把它 `pin`
 
-- 为什么需要 `Pin` 的 `poll` 方法：
+#### 具体哪些情况需要 `Pin`
 
-  | 场景           | 无Pin的风险          | Pin的保障                |
-  | :------------- | :------------------- | :----------------------- |
-  | 跨await点引用  | 移动后引用失效       | 确保引用目标不被移动     |
-  | 自引用Future   | 自指针变为悬垂指针   | 固定内存位置保证指针有效 |
-  | 唤醒后继续执行 | 状态机可能被非法移动 | 执行期间状态机位置不变   |
+| 情况                                       | 是否安全           | 是否需要 Pin    |
+| ------------------------------------------ | ------------------ | --------------- |
+| `Future` 中只包含值（非引用）              | ✅ 安全             | ❌ 不需要 Pin    |
+| `Future` 中保存了引用（如 `&mut x`）       | ❌ 不安全，可能悬空 | ✅ 需要 Pin 固定 |
+| `Future` 立即 `.await` 不保存引用          | ✅ 安全             | ❌ 不需要 Pin    |
+| `Future` 被保存到变量再 `.await`，且带引用 | ❌ 不安全           | ✅ 必须 Pin      |
 
-11. 
+#### 为什么 `Future` 默认是 `Unpin` 的？
+
+Rust 出于 ergonomics（易用性）考虑，默认假设 `Future` 是可以安全移动的（`Unpin`），但是：
+
+- **一旦包含引用或自引用结构**
+- 或者需要嵌套多个 Future
+
+就必须使用 `Pin` 显式表示这个 Future 不能再移动
+
+**`async` 函数返回的 `Future` 默认是 `!Unpin` 的**
 
 ## 宏
 
